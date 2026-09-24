@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Generador UTM con dashboard de seguimiento local." />
+  <title>UTM Campaign Builder</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">Marketing Toolkit</p>
+      <h1>UTM Campaign Builder</h1>
+      <p class="subtitle">Genera URLs con UTMs consistentes y lleva control de tus campañas.</p>
+    </div>
+    <button id="exportCsv" class="button secondary" type="button">Exportar CSV</button>
+  </header>
+
+  <main class="layout">
+    <section class="panel">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Generador</p>
+          <h2>Nueva UTM</h2>
+        </div>
+        <button id="resetForm" class="text-button" type="button">Limpiar</button>
+      </div>
+
+      <form id="utmForm">
+        <label>
+          URL de destino *
+          <input id="url" name="url" type="url" placeholder="https://tusitio.com/landing" required />
+        </label>
+
+        <div class="grid two">
+          <label>
+            utm_source *
+            <input id="source" name="source" type="text" placeholder="facebook, linkedin, google" required />
+          </label>
+          <label>
+            utm_medium *
+            <input id="medium" name="medium" type="text" placeholder="paid_social, cpc, email" required />
+          </label>
+        </div>
+
+        <label>
+          utm_campaign *
+          <input id="campaign" name="campaign" type="text" placeholder="black_friday_2026" required />
+        </label>
+
+        <div class="grid two">
+          <label>
+            utm_term
+            <input id="term" name="term" type="text" placeholder="keyword_o_audiencia" />
+          </label>
+          <label>
+            utm_content
+            <input id="content" name="content" type="text" placeholder="video_a, banner_01, cta_demo" />
+          </label>
+        </div>
+
+        <label>
+          Nombre interno
+          <input id="label" name="label" type="text" placeholder="Ej. LinkedIn - CFO - Video A" />
+        </label>
+
+        <div class="actions">
+          <button class="button primary" type="submit">Generar y guardar</button>
+        </div>
+      </form>
+
+      <div id="resultBox" class="result hidden" aria-live="polite">
+        <p class="result-label">URL generada</p>
+        <div class="result-row">
+          <input id="generatedUrl" readonly />
+          <button id="copyUrl" class="button secondary" type="button">Copiar</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel dashboard">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Dashboard</p>
+          <h2>Resumen</h2>
+        </div>
+        <button id="clearHistory" class="text-button danger" type="button">Borrar historial</button>
+      </div>
+
+      <div class="kpis">
+        <article class="kpi"><span>UTMs creadas</span><strong id="totalUtms">0</strong></article>
+        <article class="kpi"><span>Fuentes</span><strong id="totalSources">0</strong></article>
+        <article class="kpi"><span>Campañas</span><strong id="totalCampaigns">0</strong></article>
+        <article class="kpi"><span>Medios</span><strong id="totalMediums">0</strong></article>
+      </div>
+
+      <div class="charts-grid">
+        <article class="chart-card">
+          <h3>UTMs por fuente</h3>
+          <div id="sourceChart" class="bar-chart empty-state">Aún no hay datos.</div>
+        </article>
+        <article class="chart-card">
+          <h3>UTMs por medio</h3>
+          <div id="mediumChart" class="bar-chart empty-state">Aún no hay datos.</div>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel full">
+      <div class="section-heading">
+        <div>
+          <p class="eyebrow">Histórico</p>
+          <h2>URLs generadas</h2>
+        </div>
+        <span id="historyCount" class="badge">0 registros</span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Nombre</th>
+              <th>Source</th>
+              <th>Medium</th>
+              <th>Campaign</th>
+              <th>URL</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="historyBody">
+            <tr><td colspan="7" class="empty-cell">No has generado UTMs todavía.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>Los datos de esta versión se almacenan únicamente en este navegador.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
