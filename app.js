@@ -35,6 +35,56 @@ function buildUtm(data) {
   return { url: url.toString(), params };
 }
 
+async function shortenUrl(longUrl) {
+  // El proveedor devuelve una redirección hacia la URL completa, con todas las UTMs.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    const endpoint = "https://is.gd/create.php?format=json&url=" + encodeURIComponent(longUrl);
+    const response = await fetch(endpoint, { signal: controller.signal, cache: "no-store" });
+    if (!response.ok) throw new Error("Error HTTP " + response.status);
+    const result = await response.json();
+    if (result.errormessage || !result.shorturl) throw new Error(result.errormessage || "Sin URL corta");
+    const short = new URL(result.shorturl);
+    if (short.protocol !== "https:" || short.hostname !== "is.gd") throw new Error("Respuesta inesperada del acortador");
+    return short.toString();
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+function setShortStatus(message, retry = false) {
+  $("shortStatus").textContent = message;
+  $("retryShortUrl").classList.toggle("hidden", !retry);
+}
+
+async function addShortUrl(itemId) {
+  const item = getItems().find(x => x.id === itemId);
+  if (!item) return;
+  $("shortUrl").value = "";
+  $("copyShortUrl").disabled = true;
+  setShortStatus("Generando enlace corto…");
+  try {
+    const shortUrl = await shortenUrl(item.generatedUrl);
+    const items = getItems();
+    const current = items.find(x => x.id === itemId);
+    if (current && current.generatedUrl === item.generatedUrl) {
+      current.shortUrl = shortUrl;
+      saveItems(items);
+      render();
+    }
+    if ($("resultBox").dataset.itemId === itemId) {
+      $("shortUrl").value = shortUrl;
+      $("copyShortUrl").disabled = false;
+      setShortStatus("Enlace corto creado. La URL original permanece intacta.");
+    }
+  } catch (error) {
+    if ($("resultBox").dataset.itemId === itemId) {
+      setShortStatus("No se pudo acortar el enlace. Puedes usar la UTM larga o reintentar.", true);
+    }
+  }
+}
+
 function countBy(items, key) {
   return items.reduce((acc, item) => {
     const value = item[key] || "(vacío)";
@@ -82,7 +132,7 @@ function render() {
   renderBarChart("mediumChart", countBy(items, "medium"));
 
   if (!items.length) {
-    historyBody.innerHTML = `<tr><td colspan="7" class="empty-cell">No has generado UTMs todavía.</td></tr>`;
+    historyBody.innerHTML = `<tr><td colspan="8" class="empty-cell">No has generado UTMs todavía.</td></tr>`;
     return;
   }
 
@@ -94,9 +144,11 @@ function render() {
       <td>${escapeHtml(item.medium)}</td>
       <td>${escapeHtml(item.campaign)}</td>
       <td class="url-cell" title="${escapeHtml(item.generatedUrl)}">${escapeHtml(item.generatedUrl)}</td>
+      <td class="url-cell" title="${escapeHtml(item.shortUrl || "")}">${item.shortUrl ? `<a href="${escapeHtml(item.shortUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.shortUrl)}</a>` : "—"}</td>
       <td>
         <div class="row-actions">
-          <button class="button secondary mini copy-row" data-id="${item.id}" type="button">Copiar</button>
+          <button class="button secondary mini copy-row" data-id="${item.id}" type="button">Copiar larga</button>
+          <button class="button secondary mini copy-short-row" data-id="${item.id}" type="button" ${item.shortUrl ? "" : "disabled"}>Copiar corta</button>
           <button class="button secondary mini delete-row" data-id="${item.id}" type="button">Eliminar</button>
         </div>
       </td>
@@ -119,14 +171,17 @@ form.addEventListener("submit", (event) => {
       term: built.params.utm_term,
       content: built.params.utm_content,
       destinationUrl: data.url.trim(),
-      generatedUrl: built.url
+      generatedUrl: built.url,
+      shortUrl: ""
     };
     const items = getItems();
     items.unshift(item);
     saveItems(items);
     $("generatedUrl").value = built.url;
+    $("resultBox").dataset.itemId = item.id;
     $("resultBox").classList.remove("hidden");
     render();
+    addShortUrl(item.id);
   } catch {
     alert("Revisa la URL de destino. Debe comenzar por http:// o https://");
   }
@@ -138,6 +193,19 @@ $("copyUrl").addEventListener("click", async () => {
   await navigator.clipboard.writeText(value);
   $("copyUrl").textContent = "Copiado";
   setTimeout(() => $("copyUrl").textContent = "Copiar", 1200);
+});
+
+$("copyShortUrl").addEventListener("click", async () => {
+  const value = $("shortUrl").value;
+  if (!value) return;
+  await navigator.clipboard.writeText(value);
+  $("copyShortUrl").textContent = "Copiado";
+  setTimeout(() => $("copyShortUrl").textContent = "Copiar corta", 1200);
+});
+
+$("retryShortUrl").addEventListener("click", () => {
+  const id = $("resultBox").dataset.itemId;
+  if (id) addShortUrl(id);
 });
 
 $("resetForm").addEventListener("click", () => {
@@ -164,6 +232,12 @@ historyBody.addEventListener("click", async (event) => {
     setTimeout(() => button.textContent = "Copiar", 1000);
   }
 
+  if (button.classList.contains("copy-short-row") && item.shortUrl) {
+    await navigator.clipboard.writeText(item.shortUrl);
+    button.textContent = "Copiado";
+    setTimeout(() => button.textContent = "Copiar corta", 1000);
+  }
+
   if (button.classList.contains("delete-row")) {
     saveItems(items.filter(x => x.id !== item.id));
     render();
@@ -176,9 +250,9 @@ $("exportCsv").addEventListener("click", () => {
     alert("No hay UTMs para exportar.");
     return;
   }
-  const headers = ["fecha","nombre","utm_source","utm_medium","utm_campaign","utm_term","utm_content","url_destino","url_generada"];
+  const headers = ["fecha","nombre","utm_source","utm_medium","utm_campaign","utm_term","utm_content","url_destino","url_generada","url_corta"];
   const rows = items.map(x => [
-    x.createdAt, x.label, x.source, x.medium, x.campaign, x.term, x.content, x.destinationUrl, x.generatedUrl
+    x.createdAt, x.label, x.source, x.medium, x.campaign, x.term, x.content, x.destinationUrl, x.generatedUrl, x.shortUrl || ""
   ]);
   const esc = (v) => `"${String(v ?? "").replaceAll('"','""')}"`;
   const csv = [headers, ...rows].map(row => row.map(esc).join(",")).join("\n");
