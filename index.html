@@ -71,11 +71,18 @@
       </form>
 
       <div id="resultBox" class="result hidden" aria-live="polite">
-        <p class="result-label">URL generada</p>
+        <p class="result-label">URL larga con UTMs</p>
         <div class="result-row">
           <input id="generatedUrl" readonly />
           <button id="copyUrl" class="button secondary" type="button">Copiar</button>
         </div>
+        <p class="result-label short-label">URL corta (is.gd)</p>
+        <div class="result-row">
+          <input id="shortUrl" readonly placeholder="Generando enlace corto…" aria-label="URL corta" />
+          <button id="copyShortUrl" class="button secondary" type="button" disabled>Copiar corta</button>
+        </div>
+        <div class="short-status" id="shortStatus" aria-live="polite">La URL larga se conserva aunque falle el acortador.</div>
+        <button id="retryShortUrl" class="text-button hidden" type="button">Reintentar acortador</button>
       </div>
     </section>
 
@@ -125,12 +132,13 @@
               <th>Source</th>
               <th>Medium</th>
               <th>Campaign</th>
-              <th>URL</th>
+              <th>URL larga</th>
+              <th>URL corta</th>
               <th></th>
             </tr>
           </thead>
           <tbody id="historyBody">
-            <tr><td colspan="7" class="empty-cell">No has generado UTMs todavía.</td></tr>
+            <tr><td colspan="8" class="empty-cell">No has generado UTMs todavía.</td></tr>
           </tbody>
         </table>
       </div>
@@ -138,7 +146,7 @@
   </main>
 
   <footer>
-    <p>Los datos de esta versión se almacenan únicamente en este navegador.</p>
+    <p>El historial se almacena en este navegador. Los enlaces cortos se generan a través del servicio externo is.gd; no incluyas información confidencial en las URLs.</p>
   </footer>
 
   <script src="app.js"></script>
