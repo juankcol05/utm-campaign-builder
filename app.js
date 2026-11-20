@@ -132,12 +132,14 @@ function render() {
   renderBarChart("mediumChart", countBy(items, "medium"));
 
   if (!items.length) {
-    historyBody.innerHTML = `<tr><td colspan="8" class="empty-cell">No has generado UTMs todavía.</td></tr>`;
+    historyBody.innerHTML = `<tr><td colspan="9" class="empty-cell">No has generado UTMs todavía.</td></tr>`;
     return;
   }
 
-  historyBody.innerHTML = items.map(item => `
+  historyBody.innerHTML = items.map((item, index) => `
+    
     <tr>
+      <td>${items.length - index}</td>
       <td>${new Date(item.createdAt).toLocaleString("es-CO")}</td>
       <td>${escapeHtml(item.label || "—")}</td>
       <td>${escapeHtml(item.source)}</td>
@@ -244,24 +246,51 @@ historyBody.addEventListener("click", async (event) => {
   }
 });
 
-$("exportCsv").addEventListener("click", () => {
+function exportRows() {
   const items = getItems();
-  if (!items.length) {
-    alert("No hay UTMs para exportar.");
-    return;
-  }
-  const headers = ["fecha","nombre","utm_source","utm_medium","utm_campaign","utm_term","utm_content","url_destino","url_generada","url_corta"];
-  const rows = items.map(x => [
-    x.createdAt, x.label, x.source, x.medium, x.campaign, x.term, x.content, x.destinationUrl, x.generatedUrl, x.shortUrl || ""
+  const headers = ["consecutivo","fecha","nombre_interno","utm_source","utm_medium","utm_campaign","utm_term","utm_content","url_destino","url_larga","url_corta"];
+  const rows = items.map((x, index) => [
+    items.length - index, x.createdAt, x.label || "", x.source, x.medium, x.campaign,
+    x.term || "", x.content || "", x.destinationUrl, x.generatedUrl, x.shortUrl || ""
   ]);
-  const esc = (v) => `"${String(v ?? "").replaceAll('"','""')}"`;
-  const csv = [headers, ...rows].map(row => row.map(esc).join(",")).join("\n");
-  const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8;" });
+  return { items, headers, rows };
+}
+
+function downloadText(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
   const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `utm-history-${new Date().toISOString().slice(0,10)}.csv`;
+  const objectUrl = URL.createObjectURL(blob);
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
   link.click();
-  URL.revokeObjectURL(link.href);
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+}
+
+$("exportCsv").addEventListener("click", () => {
+  const { items, headers, rows } = exportRows();
+  if (!items.length) { alert("Todavía no hay UTMs para exportar."); return; }
+  // Neutraliza el inicio de fórmulas para abrir el CSV de forma más segura en Excel.
+  const safeCell = value => {
+    const raw = String(value ?? "");
+    const clean = /^[\\s]*[=+@-]/.test(raw) ? "'" + raw : raw;
+    return '"' + clean.replaceAll('"', '""') + '"';
+  };
+  const csv = [headers, ...rows].map(row => row.map(safeCell).join(";")).join("\r\n");
+  downloadText("bitacora_utms_banfondesa_" + new Date().toISOString().slice(0,10) + ".csv", "\ufeff" + csv, "text/csv;charset=utf-8");
+});
+
+$("exportTxt").addEventListener("click", () => {
+  const { items, headers, rows } = exportRows();
+  if (!items.length) { alert("Todavía no hay UTMs para exportar."); return; }
+  const lines = ["UTM Campaign Builder Banfondesa - Mercadeo", "Inventario de UTMs", "Total de registros: " + items.length, ""];
+  rows.forEach(row => {
+    lines.push("------------------------------------------------------------");
+    row.forEach((value, index) => lines.push(headers[index] + ": " + String(value ?? "")));
+    lines.push("");
+  });
+  downloadText("bitacora_utms_banfondesa_" + new Date().toISOString().slice(0,10) + ".txt", lines.join("\r\n"), "text/plain;charset=utf-8");
 });
 
 render();
