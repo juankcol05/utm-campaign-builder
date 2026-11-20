@@ -4,17 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Generador UTM con dashboard de seguimiento local." />
-  <title>UTM Campaign Builder</title>
+  <title>UTM Campaign Builder Banfondesa · Mercadeo</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <header class="topbar">
     <div>
-      <p class="eyebrow">Marketing Toolkit</p>
-      <h1>UTM Campaign Builder</h1>
+      <p class="eyebrow">Herramienta de Mercadeo</p>
+      <h1>UTM Campaign Builder <span class="brand-name">Banfondesa · Mercadeo</span></h1>
       <p class="subtitle">Genera URLs con UTMs consistentes y lleva control de tus campañas.</p>
     </div>
-    <button id="exportCsv" class="button secondary" type="button">Exportar CSV</button>
+    <a class="button secondary top-export" href="#bitacora">Descargar bitácora</a>
   </header>
 
   <main class="layout">
@@ -31,38 +31,45 @@
         <label>
           URL de destino *
           <input id="url" name="url" type="url" placeholder="https://tusitio.com/landing" required />
+          <span class="field-help">Pega la dirección completa de la página a la que llegarán los usuarios. Debe comenzar por https://. Ejemplo: https://ejemplo.com/promocion.</span>
         </label>
 
         <div class="grid two">
           <label>
             utm_source *
             <input id="source" name="source" type="text" placeholder="facebook, linkedin, google" required />
+          <span class="field-help">Identifica la fuente específica del tráfico (quién envía la visita), como facebook, instagram, google, newsletter o whatsapp.</span>
           </label>
           <label>
             utm_medium *
             <input id="medium" name="medium" type="text" placeholder="paid_social, cpc, email" required />
+          <span class="field-help">Identifica el tipo de canal o mecanismo de adquisición. Ejemplos: paid_social, cpc, email, organic_social o sms.</span>
           </label>
         </div>
 
         <label>
           utm_campaign *
           <input id="campaign" name="campaign" type="text" placeholder="black_friday_2026" required />
+          <span class="field-help">Nombre único de la campaña o iniciativa que agrupa las comunicaciones. Ejemplo: black_friday_2026.</span>
         </label>
 
         <div class="grid two">
           <label>
             utm_term
             <input id="term" name="term" type="text" placeholder="keyword_o_audiencia" />
+          <span class="field-help">Opcional. Palabra clave de búsqueda, audiencia o segmento. Ejemplo: ahorro o clientes_activos.</span>
           </label>
           <label>
             utm_content
             <input id="content" name="content" type="text" placeholder="video_a, banner_01, cta_demo" />
+          <span class="field-help">Opcional. Diferencia anuncios, piezas, botones o variantes dentro de una campaña. Ejemplo: banner_01, video_a o boton_principal.</span>
           </label>
         </div>
 
         <label>
           Nombre interno
           <input id="label" name="label" type="text" placeholder="Ej. LinkedIn - CFO - Video A" />
+          <span class="field-help">Opcional. Nombre descriptivo para identificar el enlace dentro de la bitácora; no se añade como parámetro UTM.</span>
         </label>
 
         <div class="actions">
@@ -114,7 +121,7 @@
       </div>
     </section>
 
-    <section class="panel full">
+    <section class="panel full" id="bitacora">
       <div class="section-heading">
         <div>
           <p class="eyebrow">Histórico</p>
@@ -123,10 +130,12 @@
         <span id="historyCount" class="badge">0 registros</span>
       </div>
 
+      <div class="export-panel"><div><strong>Inventario completo de UTMs</strong><p>Descarga todos los registros guardados en este navegador, con fecha, nombre, parámetros UTM, URL larga y URL corta. El CSV se abre en Excel.</p></div><div class="export-actions"><button id="exportCsv" class="button primary" type="button">Descargar para Excel (.csv)</button><button id="exportTxt" class="button secondary" type="button">Descargar texto (.txt)</button></div></div>
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
+              <th>No.</th>
               <th>Fecha</th>
               <th>Nombre</th>
               <th>Source</th>
@@ -138,7 +147,7 @@
             </tr>
           </thead>
           <tbody id="historyBody">
-            <tr><td colspan="8" class="empty-cell">No has generado UTMs todavía.</td></tr>
+            <tr><td colspan="9" class="empty-cell">No has generado UTMs todavía.</td></tr>
           </tbody>
         </table>
       </div>
@@ -146,7 +155,7 @@
   </main>
 
   <footer>
-    <p>El historial se almacena en este navegador. Los enlaces cortos se generan a través del servicio externo is.gd; no incluyas información confidencial en las URLs.</p>
+    <p>El historial se almacena únicamente en este navegador; descarga la bitácora periódicamente como respaldo. Los enlaces cortos se generan a través del servicio externo is.gd; no incluyas información confidencial en las URLs.</p>
   </footer>
 
   <script src="app.js"></script>
