@@ -158,3 +158,12 @@ footer { color: var(--muted); font-size: .78rem; padding: 18px 0 40px; text-alig
 #retryShortUrl { margin-top: 8px; }
 button:disabled { opacity: .5; cursor: not-allowed; }
 .url-cell a { color: var(--accent); }
+
+.brand-name { display: block; font-size: .46em; letter-spacing: -.02em; margin-top: 5px; color: var(--accent); }
+.top-export { text-decoration: none; white-space: nowrap; }
+.field-help { color: var(--muted); font-size: .77rem; font-weight: 400; line-height: 1.45; }
+.export-panel { display: flex; justify-content: space-between; gap: 20px; align-items: center; padding: 18px; margin: 0 0 20px; border: 1px solid var(--border); border-radius: 14px; background: var(--bg); }
+.export-panel strong { display: block; margin-bottom: 6px; }
+.export-panel p { color: var(--muted); font-size: .84rem; line-height: 1.45; max-width: 590px; }
+.export-actions { display: flex; flex-wrap: wrap; gap: 8px; flex-shrink: 0; }
+@media (max-width: 760px) { .export-panel { flex-direction: column; align-items: stretch; } .export-actions { flex-direction: column; } }
