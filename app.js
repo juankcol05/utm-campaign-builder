@@ -274,7 +274,7 @@ $("exportCsv").addEventListener("click", () => {
   // Neutraliza el inicio de fórmulas para abrir el CSV de forma más segura en Excel.
   const safeCell = value => {
     const raw = String(value ?? "");
-    const clean = /^[\\s]*[=+@-]/.test(raw) ? "'" + raw : raw;
+    const clean = /^\s*[=+@-]/.test(raw) ? "'" + raw : raw;
     return '"' + clean.replaceAll('"', '""') + '"';
   };
   const csv = [headers, ...rows].map(row => row.map(safeCell).join(";")).join("\r\n");
