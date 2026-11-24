@@ -1,34 +1,35 @@
-# Migración a Google Sheets — UTM Campaign Builder Banfondesa · Mercadeo
+# UTM Campaign Builder Banfondesa · Mercadeo — Google Sheets
 
-**Estado: preparado en GitHub y Google Sheets; requiere publicar Google Apps Script. NO activar sustitución de GitHub Pages antes de desplegar y probar.**
+## Estado
+- Google Sheets central creado y probado con una UTM real. Primer registro confirmado con consecutivo 1 y enlace corto.
+- Apps Script publicado por el propietario. La URL publicada es la aplicación **/exec** indicada más abajo.
+- El enlace de GitHub Pages ya redirige a esa aplicación y no consulta Supabase.
+- **Pendiente de aplicar en Apps Script:** las mejoras visuales de `Index.html` y `Styles.html` guardadas en este repositorio. Tras copiarlas, crear una **nueva versión** en la implementación existente.
+- Los archivos de Apps Script no se sincronizan automáticamente desde GitHub. El editor de Google contiene su propia copia.
+- La implementación actual tiene permisos **Solo yo** y el servidor valida `OWNER_EMAIL`. Otros empleados no pueden usarla con sus propias cuentas hasta configurar permisos corporativos específicos.
 
-## Google Sheets de producción
-- [Bitácora central](https://docs.google.com/spreadsheets/d/13GH9JD9HgHQOXwFvoKFk9hUvIEbCYLHtRRL3fTxt7eQ/edit)
-- Pestaña: `Bitácora UTMs`, columnas A:L; primera fila con encabezados y filtros.
-- Es el **único almacenamiento persistente**. El cliente no utiliza localStorage ni Supabase.
-- Los consecutivos se asignan desde el servidor, bajo `LockService`; no se reutilizan tras borrar.
-- El dashboard y las exportaciones se calculan a partir de los registros compartidos.
-- El historial se vuelve a leer al abrir y cada 30 segundos mientras el generador está visible.
-- El acortador is.gd se solicita desde Apps Script y guarda la URL corta en la misma fila.
+## Enlaces
+- Web histórica: https://juankcol05.github.io/utm-campaign-builder/ (redirige a Apps Script)
+- Web Apps Script: https://script.google.com/macros/s/AKfycbxngeiiYUSIf4uDfLyLjox3_Sis4yaSk046KydcnsVEdu1ZI20IZskBv4g65AFOJ7DbkA/exec
+- Bitácora central: https://docs.google.com/spreadsheets/d/13GH9JD9HgHQOXwFvoKFk9hUvIEbCYLHtRRL3fTxt7eQ/edit
 
-## Configuración necesaria (solo una vez)
-1. Abre la hoja de cálculo desde la cuenta Google propietaria y entra en **Extensiones > Apps Script**.
-2. Copia el contenido de `google-apps-script/Code.gs` al archivo `Code.gs` del proyecto Apps Script.
-3. Crea TRES archivos de tipo HTML en el mismo proyecto con los nombres **Index**, **Styles**, **Client**. Copia respectivamente el contenido de `google-apps-script/Index.html`, `Styles.html` y `Client.html`.
-4. En `Code.gs`, verifica que `OWNER_EMAIL` coincida con el correo real propietario de la hoja. Si Google Drive conectado es otra cuenta, corrige este valor con el correo Google autorizado, no una cuenta ajena.
-5. En Apps Script: **Implementar > Nueva implementación > Aplicación web**. Para acceso de un solo administrador, ejecutar como **Yo** y autorizar acceso a **Solo yo**. Revisa los permisos solicitados. No uses **Cualquier persona** sin un sistema de autorización probado y aprobado.
-6. Abre la URL `https://script.google.com/macros/s/.../exec`, inicia sesión en la misma cuenta Google y comprueba que aparece el generador con todos sus campos actuales.
-7. Crea una UTM con `https://example.com/`, `source=test`, `medium=qa`, `campaign=test_google_sheets`. Comprueba que aparece en una fila de Google Sheets, que el consecutivo coincide con el dashboard y que el acortador se guarda. Elimina la fila de prueba si es necesario.
-8. Envía la URL **real y verificada** de Apps Script para configurar en GitHub Pages la redirección desde la dirección habitual del generador; nunca inventar esa URL.
-9. Sólo después de la prueba, retirar la dependencia Supabase y considerar pausar el proyecto anterior. No se debe hacer antes porque la versión actual publicada depende todavía de Supabase.
+## Archivos de Google Apps Script
+- `Code.gs` — lectura, escritura, consecutivos bajo bloqueo y acortador is.gd.
+- `Index.html` — formulario/dashboard y panel visual de exportaciones ordenado.
+- `Styles.html` — estilos originales, con ajustes responsivos exclusivos del módulo historial.
+- `Client.html` — cliente que utiliza `google.script.run`; sin Supabase ni `localStorage`.
 
-## Seguridad, privacidad y acceso del equipo
-- Un único correo autorizado (`OWNER_EMAIL`) restringe el acceso a **esa identidad**, no a todo el equipo. Para otras personas se requerirán identidades autorizadas y una configuración de acceso distinta (preferentemente organización Google Workspace y políticas de permisos corporativas).
-- Apps Script no ofrece una forma segura de dar acceso de escritura a visitantes anónimos desde un repositorio GitHub Pages público sin una capa de autenticación/autorización. No usar una API pública de escritura ni insertar un token compartido en JavaScript.
-- Con `execute as me` y `only myself` sólo el propietario autenticado podrá usar el generador. Puede abrir desde diferentes dispositivos con esa misma cuenta.
-- Los registros antiguos de localStorage no se transfieren automáticamente. Respaldarlos/exportarlos antes de cerrar el sistema anterior y migrarlos de forma controlada si se necesitan.
+## Actualización de los estilos del historial
+1. En Apps Script, abrir `Index.html` y reemplazar el contenido íntegro por la versión de `google-apps-script/Index.html` de esta rama.
+2. Hacer lo mismo para `Styles.html`, con `google-apps-script/Styles.html`.
+3. Guardar ambos.
+4. `Implementar > Administrar implementaciones > Editar > Versión: Nueva versión > Implementar`. Conserva el mismo enlace /exec.
+5. Abrir /exec y confirmar los dos grupos visuales de botones: **Hoja compartida** y **Otras exportaciones**.
+6. Comprobar que la fila 1 sigue intacta en Sheets y que el dashboard muestra el mismo total.
 
-## Limitaciones conocidas
-- La conexión de ChatGPT utilizada permite administrar Google Sheets pero **no** crear/desplegar proyectos de Google Apps Script de manera remota. El despliegue requiere el paso manual anterior o una herramienta adicional.
-- La URL visible de Apps Script cambia frente a GitHub Pages. El enlace original de GitHub puede servir como redireccionador una vez comprobada la URL real; no hay servicio cross-origin directo confiable de `google.script.run` desde páginas GitHub.
-- Google Apps Script tiene cuotas de ejecución y `UrlFetchApp`. La sincronización periódica es un sondeo de 30 segundos, no una conexión push real.
+## Seguridad
+- La implementación pública está restringida a la cuenta propietaria.
+- No publicar una clave de acceso o token de Apps Script en GitHub ni activar ejecución anónima con permisos del propietario.
+- Para múltiples usuarios, definir cuentas autorizadas con Google Workspace y comprobar que Google Apps Script puede identificarlas de forma segura en el modo de ejecución seleccionado.
+- No hacer cambios de acceso hasta que haya autorización corporativa.
+- Historial anterior preservado en la rama de respaldo `backup/supabase-before-sheets-cutover-2026-11-24`; datos del proyecto Supabase suspendidos, no copiados automáticamente a Sheets.
