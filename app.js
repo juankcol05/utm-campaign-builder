@@ -149,9 +149,9 @@ function render() {
       <td class="url-cell" title="${escapeHtml(item.shortUrl || "")}">${item.shortUrl ? `<a href="${escapeHtml(item.shortUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.shortUrl)}</a>` : "—"}</td>
       <td>
         <div class="row-actions">
-          <button class="button secondary mini copy-row" data-id="${item.id}" type="button">Copiar larga</button>
-          <button class="button secondary mini copy-short-row" data-id="${item.id}" type="button" ${item.shortUrl ? "" : "disabled"}>Copiar corta</button>
-          <button class="button secondary mini delete-row" data-id="${item.id}" type="button">Eliminar</button>
+          <button class="button secondary mini copy-row" data-id="${escapeHtml(item.id)}" type="button">Copiar larga</button>
+          <button class="button secondary mini copy-short-row" data-id="${escapeHtml(item.id)}" type="button" ${item.shortUrl ? "" : "disabled"}>Copiar corta</button>
+          <button class="button secondary mini delete-row" data-id="${escapeHtml(item.id)}" type="button">Eliminar</button>
         </div>
       </td>
     </tr>
