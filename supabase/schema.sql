@@ -30,7 +30,8 @@ returns boolean language sql stable security definer set search_path = ''
 as $$
   select exists (
     select 1 from public.utm_team_members m
-    where lower(m.email) = lower(coalesce(auth.jwt() ->> 'email',''))
+    where auth.uid() is not null
+      and lower(m.email) = lower(coalesce(auth.jwt() ->> 'email',''))
       and (auth.jwt() ->> 'is_anonymous') is distinct from 'true'
   );
 $$;
@@ -39,14 +40,15 @@ returns boolean language sql stable security definer set search_path = ''
 as $$
   select exists (
     select 1 from public.utm_team_members m
-    where lower(m.email) = lower(coalesce(auth.jwt() ->> 'email',''))
+    where auth.uid() is not null
+      and lower(m.email) = lower(coalesce(auth.jwt() ->> 'email',''))
       and m.is_admin
       and (auth.jwt() ->> 'is_anonymous') is distinct from 'true'
   );
 $$;
 create or replace function public.utm_membership()
-returns boolean language sql stable security definer set search_path = ''
-as $$ select private.is_utm_member(); $$;
+returns boolean language sql stable security invoker set search_path = ''
+as $ select private.is_utm_member(); $;
 revoke all on public.utm_links from anon, authenticated;
 revoke all on public.utm_team_members from anon, authenticated;
 revoke all on function public.utm_membership() from public, anon;
@@ -68,7 +70,17 @@ using (private.is_utm_member()) with check (private.is_utm_member());
 drop policy if exists "utm_delete_admin" on public.utm_links;
 create policy "utm_delete_admin" on public.utm_links for delete to authenticated using (private.is_utm_admin());
 -- Ejecutar una sola vez; si la tabla ya participa en Realtime, no repetir.
-alter publication supabase_realtime add table public.utm_links;
+do $
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'utm_links'
+  ) then
+    alter publication supabase_realtime add table public.utm_links;
+  end if;
+end $;
 -- Primer administrador, ejemplo. Reemplazar con correo real autorizado:
 -- insert into public.utm_team_members (email, is_admin)
 -- values ('responsable@empresa.com', true)
