@@ -1,13 +1,28 @@
 /**
  * UTM Campaign Builder Banfondesa · Mercadeo
- * Backend abierto por URL para consultar y crear UTMs; solo hojas de Google controlan acceso al archivo.
- * IMPORTANTE: los datos del historial pasan a ser publicos para cualquier visitante de la URL.
+ * Acceso por cuentas Google individuales autorizadas.
+ * Desplegar: Ejecutar como "Usuario que accede" y acceso "Cualquier usuario con cuenta Google".
+ * IMPORTANTE: conceder acceso de EDITOR al Google Sheet solo a los correos de la lista.
  */
 const SHEET_ID = '13GH9JD9HgHQOXwFvoKFk9hUvIEbCYLHtRRL3fTxt7eQ';
 const SHEET_TAB = 'Bitácora UTMs';
 const HEADER_COUNT = 12;
+// Mantener esta lista privada conforme a las políticas del banco.
+// Añade aquí los correos Google del equipo en minúsculas.
+const ALLOWED_EMAILS = [
+  'juanklopez05@gmail.com'
+];
+
+function requireUser_() {
+  const email = String(Session.getActiveUser().getEmail() || '').toLowerCase().trim();
+  if (!email || ALLOWED_EMAILS.indexOf(email) === -1) {
+    throw new Error('Acceso denegado. Tu correo Google no está en la lista de usuarios autorizados.');
+  }
+  return email;
+}
 
 function doGet() {
+  requireUser_();
   // HTMLService ejecuta la aplicacion en Google, sin solicitudes cross-origin desde GitHub.
   const page = HtmlService.createTemplateFromFile('Index');
   page.sheetUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/edit';
@@ -51,6 +66,7 @@ function allRows_() {
 }
 
 function listUtms() {
+  requireUser_();
   return { items: allRows_(), sheetUrl: 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/edit' };
 }
 
@@ -73,6 +89,7 @@ function cleanUrl_(value) {
 }
 
 function createUtm(payload) {
+  requireUser_();
   if (!payload || typeof payload !== 'object') throw new Error('Datos incompletos.');
   const source = normalize_(payload.source);
   const medium = normalize_(payload.medium);
@@ -118,6 +135,7 @@ function createUtm(payload) {
 }
 
 function shortenUtm(id) {
+  requireUser_();
   const key = String(id || '');
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -144,9 +162,11 @@ function shortenUtm(id) {
 }
 
 function deleteUtm(id) {
+  requireUser_();
   throw new Error('No se permite borrar UTMs desde el acceso público. El propietario puede administrarlas directamente en Google Sheets.');
 }
 
 function clearAllUtms() {
+  requireUser_();
   throw new Error('La eliminación masiva está deshabilitada en la aplicación pública.');
 }
