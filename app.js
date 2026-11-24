@@ -4,16 +4,20 @@ const $ = (id) => document.getElementById(id);
 const form = $("utmForm");
 const historyBody = $("historyBody");
 
-function getItems() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-  } catch {
-    return [];
-  }
-}
+let sharedStore = null;
+let sharedItems = [];
+let storeReady = false;
 
-function saveItems(items) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+function getItems() { return sharedItems; }
+
+async function refreshShared() {
+  if (!sharedStore || !storeReady) return;
+  try {
+    sharedItems = await sharedStore.getAll();
+    render();
+  } catch (error) {
+    console.error("No se pudo actualizar el historial compartido", error);
+  }
 }
 
 function normalize(value) {
@@ -22,6 +26,7 @@ function normalize(value) {
 
 function buildUtm(data) {
   const url = new URL(data.url);
+  if (!["http:", "https:"].includes(url.protocol)) throw new Error("Protocolo inválido");
   const params = {
     utm_source: normalize(data.source),
     utm_medium: normalize(data.medium),
@@ -66,13 +71,8 @@ async function addShortUrl(itemId) {
   setShortStatus("Generando enlace corto…");
   try {
     const shortUrl = await shortenUrl(item.generatedUrl);
-    const items = getItems();
-    const current = items.find(x => x.id === itemId);
-    if (current && current.generatedUrl === item.generatedUrl) {
-      current.shortUrl = shortUrl;
-      saveItems(items);
-      render();
-    }
+    await sharedStore.updateShort(itemId, shortUrl);
+    await refreshShared();
     if ($("resultBox").dataset.itemId === itemId) {
       $("shortUrl").value = shortUrl;
       $("copyShortUrl").disabled = false;
@@ -139,7 +139,7 @@ function render() {
   historyBody.innerHTML = items.map((item, index) => `
     
     <tr>
-      <td>${items.length - index}</td>
+      <td>${item.consecutive}</td>
       <td>${new Date(item.createdAt).toLocaleString("es-CO")}</td>
       <td>${escapeHtml(item.label || "—")}</td>
       <td>${escapeHtml(item.source)}</td>
@@ -149,43 +149,58 @@ function render() {
       <td class="url-cell" title="${escapeHtml(item.shortUrl || "")}">${item.shortUrl ? `<a href="${escapeHtml(item.shortUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.shortUrl)}</a>` : "—"}</td>
       <td>
         <div class="row-actions">
-          <button class="button secondary mini copy-row" data-id="${item.id}" type="button">Copiar larga</button>
-          <button class="button secondary mini copy-short-row" data-id="${item.id}" type="button" ${item.shortUrl ? "" : "disabled"}>Copiar corta</button>
-          <button class="button secondary mini delete-row" data-id="${item.id}" type="button">Eliminar</button>
+          <button class="button secondary mini copy-row" data-id="${escapeHtml(item.id)}" type="button">Copiar larga</button>
+          <button class="button secondary mini copy-short-row" data-id="${escapeHtml(item.id)}" type="button" ${item.shortUrl ? "" : "disabled"}>Copiar corta</button>
+          <button class="button secondary mini delete-row" data-id="${escapeHtml(item.id)}" type="button">Eliminar</button>
         </div>
       </td>
     </tr>
   `).join("");
 }
 
-form.addEventListener("submit", (event) => {
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!storeReady) {
+    alert("No hay conexión autenticada con la base compartida. No se guardó la UTM.");
+    return;
+  }
   const data = Object.fromEntries(new FormData(form).entries());
+  let built;
   try {
-    const built = buildUtm(data);
-    const item = {
-      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-      createdAt: new Date().toISOString(),
-      label: data.label.trim(),
-      source: built.params.utm_source,
-      medium: built.params.utm_medium,
-      campaign: built.params.utm_campaign,
-      term: built.params.utm_term,
-      content: built.params.utm_content,
-      destinationUrl: data.url.trim(),
-      generatedUrl: built.url,
-      shortUrl: ""
-    };
-    const items = getItems();
-    items.unshift(item);
-    saveItems(items);
-    $("generatedUrl").value = built.url;
-    $("resultBox").dataset.itemId = item.id;
-    $("resultBox").classList.remove("hidden");
-    render();
-    addShortUrl(item.id);
+    built = buildUtm(data);
   } catch {
     alert("Revisa la URL de destino. Debe comenzar por http:// o https://");
+    return;
+  }
+  const item = {
+    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(),
+    createdAt: new Date().toISOString(),
+    label: data.label.trim(),
+    source: built.params.utm_source,
+    medium: built.params.utm_medium,
+    campaign: built.params.utm_campaign,
+    term: built.params.utm_term,
+    content: built.params.utm_content,
+    destinationUrl: data.url.trim(),
+    generatedUrl: built.url,
+    shortUrl: ""
+  };
+  const submitButton = form.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  try {
+    const saved = await sharedStore.add(item);
+    sharedItems = sharedItems.filter(x => x.id !== saved.id);
+    sharedItems.unshift(saved);
+    $("generatedUrl").value = built.url;
+    $("resultBox").dataset.itemId = saved.id;
+    $("resultBox").classList.remove("hidden");
+    render();
+    void addShortUrl(saved.id);
+  } catch (error) {
+    console.error(error);
+    alert("No se pudo guardar la UTM en la base central. No se asignó consecutivo.");
+  } finally {
+    submitButton.disabled = false;
   }
 });
 
@@ -215,10 +230,16 @@ $("resetForm").addEventListener("click", () => {
   $("resultBox").classList.add("hidden");
 });
 
-$("clearHistory").addEventListener("click", () => {
-  if (!confirm("¿Quieres borrar todo el historial local de UTMs?")) return;
-  localStorage.removeItem(STORAGE_KEY);
-  render();
+$("clearHistory").addEventListener("click", async () => {
+  if (!storeReady) return alert("La base compartida no está disponible.");
+  if (!confirm("¿Quieres borrar todo el historial de UTMs compartidas? Solo los administradores pueden hacerlo.")) return;
+  try {
+    await sharedStore.clearAll();
+    await refreshShared();
+  } catch (error) {
+    console.error(error);
+    alert("No se pudo borrar el historial. Esta operación está reservada a administradores.");
+  }
 });
 
 historyBody.addEventListener("click", async (event) => {
@@ -241,8 +262,15 @@ historyBody.addEventListener("click", async (event) => {
   }
 
   if (button.classList.contains("delete-row")) {
-    saveItems(items.filter(x => x.id !== item.id));
-    render();
+    if (!storeReady) return alert("La base compartida no está disponible.");
+    if (!confirm("¿Eliminar esta UTM del historial compartido?")) return;
+    try {
+      await sharedStore.remove(item.id);
+      await refreshShared();
+    } catch (error) {
+      console.error(error);
+      alert("No se pudo eliminar. Esta operación requiere permisos de administrador.");
+    }
   }
 });
 
@@ -250,7 +278,7 @@ function exportRows() {
   const items = getItems();
   const headers = ["consecutivo","fecha","nombre_interno","utm_source","utm_medium","utm_campaign","utm_term","utm_content","url_destino","url_larga","url_corta"];
   const rows = items.map((x, index) => [
-    items.length - index, x.createdAt, x.label || "", x.source, x.medium, x.campaign,
+    x.consecutive, x.createdAt, x.label || "", x.source, x.medium, x.campaign,
     x.term || "", x.content || "", x.destinationUrl, x.generatedUrl, x.shortUrl || ""
   ]);
   return { items, headers, rows };
@@ -293,4 +321,34 @@ $("exportTxt").addEventListener("click", () => {
   downloadText("bitacora_utms_banfondesa_" + new Date().toISOString().slice(0,10) + ".txt", lines.join("\r\n"), "text/plain;charset=utf-8");
 });
 
-render();
+async function startSharedStore() {
+  try {
+    const { openSharedStore } = await import("./shared-store.js");
+    sharedStore = await openSharedStore();
+    const allowed = await sharedStore.requireAccess();
+    if (!allowed) return; // Login por correo pendiente.
+    let previousItems = [];
+    try {
+      previousItems = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      if (!Array.isArray(previousItems)) previousItems = [];
+    } catch { previousItems = []; }
+    await sharedStore.migrateLegacy(previousItems);
+    storeReady = true;
+    await refreshShared();
+    sharedStore.watch((change) => {
+      if (!change) { void refreshShared(); return; }
+      if (change.type === "DELETE") {
+        sharedItems = sharedItems.filter(x => x.consecutive !== change.consecutive);
+      } else if (change.record) {
+        sharedItems = sharedItems.filter(x => x.id !== change.record.id);
+        sharedItems.unshift(change.record);
+        sharedItems.sort((a, b) => b.consecutive - a.consecutive);
+      }
+      render();
+    });
+  } catch (error) {
+    console.error("No se pudo iniciar la base central", error);
+    alert("No está disponible el historial centralizado. No se guardarán registros hasta solucionar el acceso: " + error.message);
+  }
+}
+void startSharedStore();
