@@ -13,9 +13,7 @@ function doGet() {
   requireUser_();
   const page = HtmlService.createTemplateFromFile('Index');
   page.sheetUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/edit';
-  return page.evaluate()
-    .setTitle('UTM Campaign Builder Banfondesa · Mercadeo')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+  return page.evaluate().setTitle('UTM Campaign Builder Banfondesa · Mercadeo');
 }
 
 function include(file) {
