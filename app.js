@@ -189,6 +189,7 @@ form.addEventListener("submit", async (event) => {
   submitButton.disabled = true;
   try {
     const saved = await sharedStore.add(item);
+    sharedItems = sharedItems.filter(x => x.id !== saved.id);
     sharedItems.unshift(saved);
     $("generatedUrl").value = built.url;
     $("resultBox").dataset.itemId = saved.id;
