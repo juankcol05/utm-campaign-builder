@@ -15,7 +15,7 @@ function doGet() {
 }
 
 function include(file) {
-  return HtmlService.createHtmlOutputFromFile(file).getContent();
+  return HtmlService.createTemplateFromFile(file).getRawContent();
 }
 
 function sheet_() {
