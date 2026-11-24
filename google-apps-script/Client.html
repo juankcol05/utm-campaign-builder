@@ -1,0 +1,203 @@
+
+const $=id=>document.getElementById(id);
+const form=$("utmForm"),historyBody=$("historyBody");
+let items=[],ready=false,lastItemId=null;
+const call=(method,...args)=>new Promise((resolve,reject)=>google.script.run.withSuccessHandler(resolve).withFailureHandler(reject)[method](...args));
+function getItems(){return items;}
+function updateStatus(text){
+ let el=$("sheetConnectionStatus");
+ if(!el){el=document.createElement("div");el.id="sheetConnectionStatus";el.style.cssText="font-size:.8rem;color:#6b7280;margin-top:8px";document.querySelector(".export-panel").appendChild(el);}
+ el.textContent=text;
+}
+async function refreshShared(){
+ try{const data=await call("listUtms");items=data.items||[];ready=true;render();updateStatus("Google Sheets sincronizado: "+items.length+" registros.");}
+ catch(e){ready=false;updateStatus("No se pudo sincronizar Google Sheets: "+(e.message||e));}
+}
+function normalize(value) {
+  return value.trim().toLowerCase().replace(/\s+/g, "_");
+}
+
+function buildUtm(data) {
+  const url = new URL(data.url);
+  if (!["http:", "https:"].includes(url.protocol)) throw new Error("Protocolo inválido");
+  const params = {
+    utm_source: normalize(data.source),
+    utm_medium: normalize(data.medium),
+    utm_campaign: normalize(data.campaign),
+    utm_term: normalize(data.term || ""),
+    utm_content: normalize(data.content || "")
+  };
+  Object.entries(params).forEach(([key, value]) => {
+    if (value) url.searchParams.set(key, value);
+  });
+  return { url: url.toString(), params };
+}
+
+
+function setShortStatus(message,retry=false){$("shortStatus").textContent=message;$("retryShortUrl").classList.toggle("hidden",!retry);}
+async function addShortUrl(id){
+ $("shortUrl").value="";$("copyShortUrl").disabled=true;setShortStatus("Generando enlace corto…");
+ try{const short=await call("shortenUtm",id);await refreshShared();if(id===lastItemId){$("shortUrl").value=short;$("copyShortUrl").disabled=false;setShortStatus("Enlace corto creado. La URL original permanece intacta.");}}
+ catch(e){if(id===lastItemId)setShortStatus("No se pudo acortar el enlace. Puedes usar la UTM larga o reintentar.",true);}
+}
+function countBy(items, key) {
+  return items.reduce((acc, item) => {
+    const value = item[key] || "(vacío)";
+    acc[value] = (acc[value] || 0) + 1;
+    return acc;
+  }, {});
+}
+
+function renderBarChart(targetId, counts) {
+  const target = $(targetId);
+  const entries = Object.entries(counts).sort((a,b) => b[1] - a[1]).slice(0, 8);
+  if (!entries.length) {
+    target.className = "bar-chart empty-state";
+    target.textContent = "Aún no hay datos.";
+    return;
+  }
+  const max = Math.max(...entries.map(([,value]) => value));
+  target.className = "bar-chart";
+  target.innerHTML = entries.map(([label, value]) => `
+    <div class="bar-row">
+      <span class="bar-label" title="${escapeHtml(label)}">${escapeHtml(label)}</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${(value/max)*100}%"></div></div>
+      <span class="bar-value">${value}</span>
+    </div>
+  `).join("");
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+function render() {
+  const items = getItems();
+  $("totalUtms").textContent = items.length;
+  $("totalSources").textContent = new Set(items.map(x => x.source)).size;
+  $("totalCampaigns").textContent = new Set(items.map(x => x.campaign)).size;
+  $("totalMediums").textContent = new Set(items.map(x => x.medium)).size;
+  $("historyCount").textContent = `${items.length} ${items.length === 1 ? "registro" : "registros"}`;
+
+  renderBarChart("sourceChart", countBy(items, "source"));
+  renderBarChart("mediumChart", countBy(items, "medium"));
+
+  if (!items.length) {
+    historyBody.innerHTML = `<tr><td colspan="9" class="empty-cell">No has generado UTMs todavía.</td></tr>`;
+    return;
+  }
+
+  historyBody.innerHTML = items.map((item, index) => `
+    
+    <tr>
+      <td>${item.consecutive}</td>
+      <td>${new Date(item.createdAt).toLocaleString("es-CO")}</td>
+      <td>${escapeHtml(item.label || "—")}</td>
+      <td>${escapeHtml(item.source)}</td>
+      <td>${escapeHtml(item.medium)}</td>
+      <td>${escapeHtml(item.campaign)}</td>
+      <td class="url-cell" title="${escapeHtml(item.generatedUrl)}">${escapeHtml(item.generatedUrl)}</td>
+      <td class="url-cell" title="${escapeHtml(item.shortUrl || "")}">${item.shortUrl ? `<a href="${escapeHtml(item.shortUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(item.shortUrl)}</a>` : "—"}</td>
+      <td>
+        <div class="row-actions">
+          <button class="button secondary mini copy-row" data-id="${escapeHtml(item.id)}" type="button">Copiar larga</button>
+          <button class="button secondary mini copy-short-row" data-id="${escapeHtml(item.id)}" type="button" ${item.shortUrl ? "" : "disabled"}>Copiar corta</button>
+          <button class="button secondary mini delete-row" data-id="${escapeHtml(item.id)}" type="button">Eliminar</button>
+        </div>
+      </td>
+    </tr>
+  `).join("");
+}
+
+
+form.addEventListener("submit",async event=>{
+ event.preventDefault();
+ if(!ready)return alert("No existe conexión con Google Sheets. No se guardó la UTM.");
+ const data=Object.fromEntries(new FormData(form).entries());
+ let built;try{built=buildUtm(data);}catch{return alert("Revisa la URL de destino.");}
+ const record={id:crypto.randomUUID?crypto.randomUUID():String(Date.now())+"_"+Math.random(),label:(data.label||"").trim(),source:built.params.utm_source,medium:built.params.utm_medium,campaign:built.params.utm_campaign,term:built.params.utm_term,content:built.params.utm_content,destinationUrl:data.url.trim(),generatedUrl:built.url};
+ const button=form.querySelector('[type="submit"]');button.disabled=true;
+ try{const saved=await call("createUtm",record);lastItemId=saved.id;$("generatedUrl").value=saved.generatedUrl;$("resultBox").classList.remove("hidden");items=[saved,...items.filter(x=>x.id!==saved.id)].sort((x,y)=>y.consecutive-x.consecutive);render();void addShortUrl(saved.id);}
+ catch(e){alert("No se pudo guardar en Google Sheets: "+(e.message||e));}
+ finally{button.disabled=false;}
+});
+async function copyText(value,button,label){
+ try{if(navigator.clipboard?.writeText)await navigator.clipboard.writeText(value);
+ else{const el=document.createElement("textarea");el.value=value;document.body.appendChild(el);el.select();document.execCommand("copy");el.remove();}
+ button.textContent="Copiado";setTimeout(()=>button.textContent=label,1200);}
+ catch{alert("No se pudo copiar el enlace.");}
+}
+$("copyUrl").addEventListener("click",()=>copyText($("generatedUrl").value,$("copyUrl"),"Copiar"));
+$("copyShortUrl").addEventListener("click",()=>copyText($("shortUrl").value,$("copyShortUrl"),"Copiar corta"));
+$("retryShortUrl").addEventListener("click",()=>{if(lastItemId)void addShortUrl(lastItemId);});
+$("resetForm").addEventListener("click",()=>{form.reset();$("resultBox").classList.add("hidden");});
+$("clearHistory").addEventListener("click",async()=>{
+ if(!confirm("¿Borrar todo el historial central de Google Sheets?"))return;
+ if(!confirm("Confirma que deseas eliminar definitivamente todas las UTMs. El consecutivo no se reiniciará."))return;
+ try{await call("clearAllUtms");await refreshShared();}catch(e){alert(e.message||e);}
+});
+historyBody.addEventListener("click",async event=>{
+ const button=event.target.closest("button");if(!button)return;
+ const item=items.find(x=>x.id===button.dataset.id);if(!item)return;
+ if(button.classList.contains("copy-row"))return copyText(item.generatedUrl,button,"Copiar larga");
+ if(button.classList.contains("copy-short-row"))return copyText(item.shortUrl,button,"Copiar corta");
+ if(button.classList.contains("delete-row")){
+  if(!confirm("¿Eliminar esta UTM de Google Sheets?"))return;
+  try{await call("deleteUtm",item.id);await refreshShared();}catch(e){alert(e.message||e);}
+ }
+});
+function exportRows() {
+  const items = getItems();
+  const headers = ["consecutivo","fecha","nombre_interno","utm_source","utm_medium","utm_campaign","utm_term","utm_content","url_destino","url_larga","url_corta"];
+  const rows = items.map((x, index) => [
+    x.consecutive, x.createdAt, x.label || "", x.source, x.medium, x.campaign,
+    x.term || "", x.content || "", x.destinationUrl, x.generatedUrl, x.shortUrl || ""
+  ]);
+  return { items, headers, rows };
+}
+
+function downloadText(filename, content, mimeType) {
+  const blob = new Blob([content], { type: mimeType });
+  const link = document.createElement("a");
+  const objectUrl = URL.createObjectURL(blob);
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+}
+
+$("exportCsv").addEventListener("click", () => {
+  const { items, headers, rows } = exportRows();
+  if (!items.length) { alert("Todavía no hay UTMs para exportar."); return; }
+  // Neutraliza el inicio de fórmulas para abrir el CSV de forma más segura en Excel.
+  const safeCell = value => {
+    const raw = String(value ?? "");
+    const clean = /^\s*[=+@-]/.test(raw) ? "'" + raw : raw;
+    return '"' + clean.replaceAll('"', '""') + '"';
+  };
+  const csv = [headers, ...rows].map(row => row.map(safeCell).join(";")).join("\r\n");
+  downloadText("bitacora_utms_banfondesa_" + new Date().toISOString().slice(0,10) + ".csv", "\ufeff" + csv, "text/csv;charset=utf-8");
+});
+
+$("exportTxt").addEventListener("click", () => {
+  const { items, headers, rows } = exportRows();
+  if (!items.length) { alert("Todavía no hay UTMs para exportar."); return; }
+  const lines = ["UTM Campaign Builder Banfondesa - Mercadeo", "Inventario de UTMs", "Total de registros: " + items.length, ""];
+  rows.forEach(row => {
+    lines.push("------------------------------------------------------------");
+    row.forEach((value, index) => lines.push(headers[index] + ": " + String(value ?? "")));
+    lines.push("");
+  });
+  downloadText("bitacora_utms_banfondesa_" + new Date().toISOString().slice(0,10) + ".txt", lines.join("\r\n"), "text/plain;charset=utf-8");
+});
+
+
+void refreshShared();
+setInterval(()=>{if(!document.hidden)void refreshShared();},30000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)void refreshShared();});
