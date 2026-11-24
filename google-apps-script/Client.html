@@ -1,4 +1,4 @@
-
+<script>
 const $=id=>document.getElementById(id);
 const form=$("utmForm"),historyBody=$("historyBody");
 let items=[],ready=false,lastItemId=null;
@@ -201,3 +201,4 @@ $("exportTxt").addEventListener("click", () => {
 void refreshShared();
 setInterval(()=>{if(!document.hidden)void refreshShared();},30000);
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)void refreshShared();});
+</script>
