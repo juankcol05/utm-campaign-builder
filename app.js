@@ -334,7 +334,17 @@ async function startSharedStore() {
     await sharedStore.migrateLegacy(previousItems);
     storeReady = true;
     await refreshShared();
-    sharedStore.watch(() => { void refreshShared(); });
+    sharedStore.watch((change) => {
+      if (!change) { void refreshShared(); return; }
+      if (change.type === "DELETE") {
+        sharedItems = sharedItems.filter(x => x.consecutive !== change.consecutive);
+      } else if (change.record) {
+        sharedItems = sharedItems.filter(x => x.id !== change.record.id);
+        sharedItems.unshift(change.record);
+        sharedItems.sort((a, b) => b.consecutive - a.consecutive);
+      }
+      render();
+    });
   } catch (error) {
     console.error("No se pudo iniciar la base central", error);
     alert("No está disponible el historial centralizado. No se guardarán registros hasta solucionar el acceso: " + error.message);
