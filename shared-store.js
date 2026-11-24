@@ -30,14 +30,35 @@ export async function openSharedStore() {
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error) throw error;
     if (!session) {
-      const email = window.prompt("Ingresa tu correo autorizado para acceder a la bitácora compartida:");
+      // Evitar reenvíos automáticos cuando el enlace de acceso anterior ha caducado.
+      const fragment = new URLSearchParams(window.location.hash.slice(1));
+      if (fragment.get("error") || fragment.get("error_code")) {
+        const code = fragment.get("error_code") || "login_failed";
+        window.history.replaceState(null, "", window.location.pathname + window.location.search);
+        throw new Error("El enlace de acceso no se pudo validar (" + code + "). Revisa la URL de retorno en Supabase y utiliza un correo nuevo.");
+      }
+      const lastAttempt = Number(localStorage.getItem("utm_last_magic_link_attempt") || "0");
+      if (Date.now() - lastAttempt < 120000) {
+        throw new Error("Ya solicitaste un enlace recientemente. Consulta el correo anterior: Supabase limita los envíos y los enlaces son de un solo uso.");
+      }
+      const email = window.prompt("Correo autorizado para acceder al historial compartido:");
       if (!email) return false;
+      const trimmed = email.trim();
+      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(trimmed)) {
+        throw new Error("Escribe una dirección de correo válida.");
+      }
       const { error: otpError } = await supabase.auth.signInWithOtp({
-        email: email.trim(),
-        options: { emailRedirectTo: window.location.origin + window.location.pathname }
+        email: trimmed,
+        options: { emailRedirectTo: "https://juankcol05.github.io/utm-campaign-builder/" }
       });
-      if (otpError) throw otpError;
-      window.alert("Enviamos un enlace de acceso a tu correo. Ábrelo para continuar.");
+      if (otpError) {
+        if (otpError.status === 429 || /rate limit|rate_limit/i.test(otpError.message || "")) {
+          throw new Error("Se alcanzó el límite de correos de Supabase (2 por hora en el servicio integrado). No solicites otro enlace hasta que se restablezca el cupo.");
+        }
+        throw otpError;
+      }
+      localStorage.setItem("utm_last_magic_link_attempt", String(Date.now()));
+      window.alert("Revisa tu correo. Abre una sola vez el enlace más reciente. Si te envía a localhost:3000, configura Site URL y Redirect URLs en Supabase.");
       return false;
     }
     const { data, error: membershipError } = await supabase.rpc("utm_membership");
