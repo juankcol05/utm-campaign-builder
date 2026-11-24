@@ -99,9 +99,18 @@ export async function openSharedStore() {
   }
   function watch(onChange) {
     const channel = supabase.channel("utm-shared-history")
-      .on("postgres_changes", { event: "*", schema: "public", table: "utm_links" }, () => onChange())
+      .on("postgres_changes", { event: "*", schema: "public", table: "utm_links" }, (payload) => {
+        if (payload.eventType === "DELETE" && payload.old?.id) {
+          onChange({ type: "DELETE", consecutive: payload.old.id });
+        } else if (payload.new?.id) {
+          onChange({ type: payload.eventType, record: mapRecord(payload.new) });
+        } else {
+          onChange(null);
+        }
+      })
       .subscribe();
-    const interval = setInterval(() => { if (!document.hidden) onChange(); }, 30000);
+    // Respaldo periódico; el flujo Realtime actualiza filas sin descargar toda la tabla.
+    const interval = setInterval(() => { if (!document.hidden) onChange(null); }, 300000);
     const visible = () => { if (!document.hidden) onChange(); };
     document.addEventListener("visibilitychange", visible);
     return () => {
