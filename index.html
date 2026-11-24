@@ -1,163 +1,20 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Generador UTM con dashboard de seguimiento local." />
-  <title>UTM Campaign Builder Banfondesa · Mercadeo</title>
-  <link rel="stylesheet" href="styles.css" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="refresh" content="0;url=https://script.google.com/macros/s/AKfycbxngeiiYUSIf4uDfLyLjox3_Sis4yaSk046KydcnsVEdu1ZI20IZskBv4g65AFOJ7DbkA/exec">
+<meta name="robots" content="noindex">
+<title>UTM Campaign Builder Banfondesa · Mercadeo</title>
+<style>
+body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;background:#f5f7fb;color:#172033;display:grid;place-items:center;min-height:100vh;margin:0;padding:22px}
+main{max-width:520px;background:white;border:1px solid #dfe4ec;border-radius:18px;padding:32px;text-align:center}
+a{color:#1f5eff;font-weight:600}
+</style>
+<script>
+  // La aplicación original se conserva en la rama backup por si hay que revertir.
+  window.location.replace("https://script.google.com/macros/s/AKfycbxngeiiYUSIf4uDfLyLjox3_Sis4yaSk046KydcnsVEdu1ZI20IZskBv4g65AFOJ7DbkA/exec");
+</script>
 </head>
-<body>
-  <header class="topbar">
-    <div>
-      <p class="eyebrow">Herramienta de Mercadeo</p>
-      <h1>UTM Campaign Builder <span class="brand-name">Banfondesa · Mercadeo</span></h1>
-      <p class="subtitle">Genera URLs con UTMs consistentes y lleva control de tus campañas.</p>
-    </div>
-    <a class="button secondary top-export" href="#bitacora">Descargar bitácora</a>
-  </header>
-
-  <main class="layout">
-    <section class="panel">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">Generador</p>
-          <h2>Nueva UTM</h2>
-        </div>
-        <button id="resetForm" class="text-button" type="button">Limpiar</button>
-      </div>
-
-      <form id="utmForm">
-        <label>
-          URL de destino *
-          <input id="url" name="url" type="url" placeholder="https://tusitio.com/landing" required />
-          <span class="field-help">Pega la dirección completa de la página a la que llegarán los usuarios. Debe comenzar por https://. Ejemplo: https://ejemplo.com/promocion.</span>
-        </label>
-
-        <div class="grid two">
-          <label>
-            utm_source *
-            <input id="source" name="source" type="text" placeholder="facebook, linkedin, google" required />
-          <span class="field-help">Identifica la fuente específica del tráfico (quién envía la visita), como facebook, instagram, google, newsletter o whatsapp.</span>
-          </label>
-          <label>
-            utm_medium *
-            <input id="medium" name="medium" type="text" placeholder="paid_social, cpc, email" required />
-          <span class="field-help">Identifica el tipo de canal o mecanismo de adquisición. Ejemplos: paid_social, cpc, email, organic_social o sms.</span>
-          </label>
-        </div>
-
-        <label>
-          utm_campaign *
-          <input id="campaign" name="campaign" type="text" placeholder="black_friday_2026" required />
-          <span class="field-help">Nombre único de la campaña o iniciativa que agrupa las comunicaciones. Ejemplo: black_friday_2026.</span>
-        </label>
-
-        <div class="grid two">
-          <label>
-            utm_term
-            <input id="term" name="term" type="text" placeholder="keyword_o_audiencia" />
-          <span class="field-help">Opcional. Palabra clave de búsqueda, audiencia o segmento. Ejemplo: ahorro o clientes_activos.</span>
-          </label>
-          <label>
-            utm_content
-            <input id="content" name="content" type="text" placeholder="video_a, banner_01, cta_demo" />
-          <span class="field-help">Opcional. Diferencia anuncios, piezas, botones o variantes dentro de una campaña. Ejemplo: banner_01, video_a o boton_principal.</span>
-          </label>
-        </div>
-
-        <label>
-          Nombre interno
-          <input id="label" name="label" type="text" placeholder="Ej. LinkedIn - CFO - Video A" />
-          <span class="field-help">Opcional. Nombre descriptivo para identificar el enlace dentro de la bitácora; no se añade como parámetro UTM.</span>
-        </label>
-
-        <div class="actions">
-          <button class="button primary" type="submit">Generar y guardar</button>
-        </div>
-      </form>
-
-      <div id="resultBox" class="result hidden" aria-live="polite">
-        <p class="result-label">URL larga con UTMs</p>
-        <div class="result-row">
-          <input id="generatedUrl" readonly />
-          <button id="copyUrl" class="button secondary" type="button">Copiar</button>
-        </div>
-        <p class="result-label short-label">URL corta (is.gd)</p>
-        <div class="result-row">
-          <input id="shortUrl" readonly placeholder="Generando enlace corto…" aria-label="URL corta" />
-          <button id="copyShortUrl" class="button secondary" type="button" disabled>Copiar corta</button>
-        </div>
-        <div class="short-status" id="shortStatus" aria-live="polite">La URL larga se conserva aunque falle el acortador.</div>
-        <button id="retryShortUrl" class="text-button hidden" type="button">Reintentar acortador</button>
-      </div>
-    </section>
-
-    <section class="panel dashboard">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">Dashboard</p>
-          <h2>Resumen</h2>
-        </div>
-        <button id="clearHistory" class="text-button danger" type="button">Borrar historial</button>
-      </div>
-
-      <div class="kpis">
-        <article class="kpi"><span>UTMs creadas</span><strong id="totalUtms">0</strong></article>
-        <article class="kpi"><span>Fuentes</span><strong id="totalSources">0</strong></article>
-        <article class="kpi"><span>Campañas</span><strong id="totalCampaigns">0</strong></article>
-        <article class="kpi"><span>Medios</span><strong id="totalMediums">0</strong></article>
-      </div>
-
-      <div class="charts-grid">
-        <article class="chart-card">
-          <h3>UTMs por fuente</h3>
-          <div id="sourceChart" class="bar-chart empty-state">Aún no hay datos.</div>
-        </article>
-        <article class="chart-card">
-          <h3>UTMs por medio</h3>
-          <div id="mediumChart" class="bar-chart empty-state">Aún no hay datos.</div>
-        </article>
-      </div>
-    </section>
-
-    <section class="panel full" id="bitacora">
-      <div class="section-heading">
-        <div>
-          <p class="eyebrow">Histórico</p>
-          <h2>URLs generadas</h2>
-        </div>
-        <span id="historyCount" class="badge">0 registros</span>
-      </div>
-
-      <div class="export-panel"><div><strong>Inventario completo de UTMs</strong><p>Descarga todos los registros guardados en este navegador, con fecha, nombre, parámetros UTM, URL larga y URL corta. El CSV se abre en Excel.</p></div><div class="export-actions"><button id="exportCsv" class="button primary" type="button">Descargar para Excel (.csv)</button><button id="exportTxt" class="button secondary" type="button">Descargar texto (.txt)</button></div></div>
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th>No.</th>
-              <th>Fecha</th>
-              <th>Nombre</th>
-              <th>Source</th>
-              <th>Medium</th>
-              <th>Campaign</th>
-              <th>URL larga</th>
-              <th>URL corta</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody id="historyBody">
-            <tr><td colspan="9" class="empty-cell">No has generado UTMs todavía.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <p>El historial se almacena únicamente en este navegador; descarga la bitácora periódicamente como respaldo. Los enlaces cortos se generan a través del servicio externo is.gd; no incluyas información confidencial en las URLs.</p>
-  </footer>
-
-  <script type="module" src="app.js"></script>
-</body>
+<body><main><h1>UTM Campaign Builder</h1><p>Banfondesa · Mercadeo</p><p>La herramienta ahora utiliza un historial centralizado en Google Sheets.</p><p><a href="https://script.google.com/macros/s/AKfycbxngeiiYUSIf4uDfLyLjox3_Sis4yaSk046KydcnsVEdu1ZI20IZskBv4g65AFOJ7DbkA/exec">Abrir generador de UTMs</a></p></main></body>
 </html>
