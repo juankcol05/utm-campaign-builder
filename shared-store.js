@@ -70,12 +70,14 @@ export async function openSharedStore() {
     if (error) throw error;
   }
   async function remove(clientId) {
-    const { error } = await supabase.from("utm_links").delete().eq("client_id", clientId);
+    const { data, error } = await supabase.from("utm_links").delete().eq("client_id", clientId).select("id");
     if (error) throw error;
+    if (!data || data.length === 0) throw new Error("No tienes permisos para eliminar este registro.");
   }
   async function clearAll() {
-    const { error } = await supabase.from("utm_links").delete().gt("id", 0);
+    const { data, error } = await supabase.from("utm_links").delete().gt("id", 0).select("id");
     if (error) throw error;
+    if (!data || data.length === 0) throw new Error("No tienes permisos para borrar el inventario compartido o ya estaba vacío.");
   }
   async function migrateLegacy(legacyItems) {
     const marker = "utm_shared_import_v1";
