@@ -1,3 +1,4 @@
+import { openSharedStore } from './shared-store.js';
 const STORAGE_KEY = "utm_campaign_builder_v1";
 
 const $ = (id) => document.getElementById(id);
@@ -6,29 +7,20 @@ const historyBody = $("historyBody");
 
 let sharedStore = null;
 let sharedItems = [];
-let isRefreshing = false;
-let nextRefresh = false;
+let storeReady = false;
 
-// Nunca calcular el inventario global en localStorage.
 function getItems() { return sharedItems; }
-function readLegacyHistory() {
-  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
-  catch { return []; }
-}
-async function refreshSharedHistory() {
-  if (!sharedStore) return;
-  if (isRefreshing) { nextRefresh = true; return; }
-  isRefreshing = true;
+
+async function refreshShared() {
+  if (!sharedStore || !storeReady) return;
   try {
     sharedItems = await sharedStore.getAll();
     render();
   } catch (error) {
-    console.error("No se pudo sincronizar el historial", error);
-  } finally {
-    isRefreshing = false;
-    if (nextRefresh) { nextRefresh = false; refreshSharedHistory(); }
+    console.error("No se pudo actualizar el historial compartido", error);
   }
 }
+
 function normalize(value) {
   return value.trim().toLowerCase().replace(/\s+/g, "_");
 }
@@ -79,12 +71,8 @@ async function addShortUrl(itemId) {
   setShortStatus("Generando enlace corto…");
   try {
     const shortUrl = await shortenUrl(item.generatedUrl);
-    const items = getItems();
-    const current = items.find(x => x.id === itemId);
-    if (current && current.generatedUrl === item.generatedUrl) {
-      await sharedStore.updateShort(itemId, shortUrl);
-      await refreshSharedHistory();
-    }
+    await sharedStore.updateShort(itemId, shortUrl);
+    await refreshShared();
     if ($("resultBox").dataset.itemId === itemId) {
       $("shortUrl").value = shortUrl;
       $("copyShortUrl").disabled = false;
@@ -172,40 +160,44 @@ function render() {
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
-  if (!sharedStore) {
-    alert("La bitácora central todavía no está disponible. No se ha creado ningún registro.");
+  if (!storeReady) {
+    alert("No hay conexión autenticada con la base compartida. No se guardó la UTM.");
     return;
   }
   const data = Object.fromEntries(new FormData(form).entries());
   let built;
   try {
     built = buildUtm(data);
-    if (!/^https?:$/.test(new URL(built.url).protocol)) throw new Error("Protocolo inválido");
   } catch {
     alert("Revisa la URL de destino. Debe comenzar por http:// o https://");
     return;
   }
   const item = {
-    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(),
     createdAt: new Date().toISOString(),
     label: data.label.trim(),
-    source: built.params.utm_source, medium: built.params.utm_medium,
-    campaign: built.params.utm_campaign, term: built.params.utm_term,
-    content: built.params.utm_content, destinationUrl: data.url.trim(),
-    generatedUrl: built.url, shortUrl: ""
+    source: built.params.utm_source,
+    medium: built.params.utm_medium,
+    campaign: built.params.utm_campaign,
+    term: built.params.utm_term,
+    content: built.params.utm_content,
+    destinationUrl: data.url.trim(),
+    generatedUrl: built.url,
+    shortUrl: ""
   };
   const submitButton = form.querySelector('button[type="submit"]');
   submitButton.disabled = true;
   try {
-    await sharedStore.add(item); // ID global otorgado por PostgreSQL.
-    await refreshSharedHistory();
+    const saved = await sharedStore.add(item);
+    sharedItems.unshift(saved);
     $("generatedUrl").value = built.url;
-    $("resultBox").dataset.itemId = item.id;
+    $("resultBox").dataset.itemId = saved.id;
     $("resultBox").classList.remove("hidden");
-    addShortUrl(item.id);
+    render();
+    void addShortUrl(saved.id);
   } catch (error) {
     console.error(error);
-    alert("No se pudo guardar la UTM en la base de datos central. No se ha registrado como creada.");
+    alert("No se pudo guardar la UTM en la base central. No se asignó consecutivo.");
   } finally {
     submitButton.disabled = false;
   }
@@ -238,15 +230,14 @@ $("resetForm").addEventListener("click", () => {
 });
 
 $("clearHistory").addEventListener("click", async () => {
-  if (!sharedStore) { alert("Conexión compartida no disponible."); return; }
-  if (!confirm("Esto eliminará el historial PARA TODOS LOS USUARIOS. Solo un administrador puede hacerlo. ¿Continuar?")) return;
-  if (!confirm("Confirma por segunda vez que deseas borrar el inventario compartido completo.")) return;
+  if (!storeReady) return alert("La base compartida no está disponible.");
+  if (!confirm("¿Quieres borrar todo el historial de UTMs compartidas? Solo los administradores pueden hacerlo.")) return;
   try {
     await sharedStore.clearAll();
-    await refreshSharedHistory();
+    await refreshShared();
   } catch (error) {
     console.error(error);
-    alert("No se eliminó el inventario. Es posible que tu usuario no tenga permisos de administrador.");
+    alert("No se pudo borrar el historial. Esta operación está reservada a administradores.");
   }
 });
 
@@ -270,13 +261,14 @@ historyBody.addEventListener("click", async (event) => {
   }
 
   if (button.classList.contains("delete-row")) {
-    if (!confirm("Este registro desaparecerá para TODOS los usuarios. ¿Eliminar?")) return;
+    if (!storeReady) return alert("La base compartida no está disponible.");
+    if (!confirm("¿Eliminar esta UTM del historial compartido?")) return;
     try {
       await sharedStore.remove(item.id);
-      await refreshSharedHistory();
+      await refreshShared();
     } catch (error) {
       console.error(error);
-      alert("No se eliminó. Solo los administradores pueden borrar UTMs del inventario central.");
+      alert("No se pudo eliminar. Esta operación requiere permisos de administrador.");
     }
   }
 });
@@ -328,22 +320,23 @@ $("exportTxt").addEventListener("click", () => {
   downloadText("bitacora_utms_banfondesa_" + new Date().toISOString().slice(0,10) + ".txt", lines.join("\r\n"), "text/plain;charset=utf-8");
 });
 
-async function initializeSharedHistory() {
+async function startSharedStore() {
   try {
-    const { openSharedStore } = await import("./shared-store.js");
-    const candidate = await openSharedStore();
-    const authorized = await candidate.requireAccess();
-    if (!authorized) return;
-    // Al iniciar desde cada dispositivo se incorporan sus registros anteriores.
-    // Las importaciones son idempotentes por el ID único antiguo.
-    await candidate.migrateLegacy(readLegacyHistory());
-    sharedStore = candidate;
-    await refreshSharedHistory();
-    sharedStore.watch(refreshSharedHistory);
+    sharedStore = await openSharedStore();
+    const allowed = await sharedStore.requireAccess();
+    if (!allowed) return; // Login por correo pendiente.
+    let previousItems = [];
+    try {
+      previousItems = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+      if (!Array.isArray(previousItems)) previousItems = [];
+    } catch { previousItems = []; }
+    await sharedStore.migrateLegacy(previousItems);
+    storeReady = true;
+    await refreshShared();
+    sharedStore.watch(() => { void refreshShared(); });
   } catch (error) {
-    console.error("No se pudo iniciar el inventario compartido", error);
-    alert("No se pudo conectar a la bitácora compartida: " + error.message);
+    console.error("No se pudo iniciar la base central", error);
+    alert("No está disponible el historial centralizado. No se guardarán registros hasta solucionar el acceso: " + error.message);
   }
 }
-
-initializeSharedHistory();
+void startSharedStore();
