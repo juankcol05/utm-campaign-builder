@@ -4,18 +4,31 @@ const $ = (id) => document.getElementById(id);
 const form = $("utmForm");
 const historyBody = $("historyBody");
 
-function getItems() {
+let sharedStore = null;
+let sharedItems = [];
+let isRefreshing = false;
+let nextRefresh = false;
+
+// Nunca calcular el inventario global en localStorage.
+function getItems() { return sharedItems; }
+function readLegacyHistory() {
+  try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
+  catch { return []; }
+}
+async function refreshSharedHistory() {
+  if (!sharedStore) return;
+  if (isRefreshing) { nextRefresh = true; return; }
+  isRefreshing = true;
   try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-  } catch {
-    return [];
+    sharedItems = await sharedStore.getAll();
+    render();
+  } catch (error) {
+    console.error("No se pudo sincronizar el historial", error);
+  } finally {
+    isRefreshing = false;
+    if (nextRefresh) { nextRefresh = false; refreshSharedHistory(); }
   }
 }
-
-function saveItems(items) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
-}
-
 function normalize(value) {
   return value.trim().toLowerCase().replace(/\s+/g, "_");
 }
@@ -69,9 +82,8 @@ async function addShortUrl(itemId) {
     const items = getItems();
     const current = items.find(x => x.id === itemId);
     if (current && current.generatedUrl === item.generatedUrl) {
-      current.shortUrl = shortUrl;
-      saveItems(items);
-      render();
+      await sharedStore.updateShort(itemId, shortUrl);
+      await refreshSharedHistory();
     }
     if ($("resultBox").dataset.itemId === itemId) {
       $("shortUrl").value = shortUrl;
@@ -139,7 +151,7 @@ function render() {
   historyBody.innerHTML = items.map((item, index) => `
     
     <tr>
-      <td>${items.length - index}</td>
+      <td>${item.consecutive}</td>
       <td>${new Date(item.createdAt).toLocaleString("es-CO")}</td>
       <td>${escapeHtml(item.label || "—")}</td>
       <td>${escapeHtml(item.source)}</td>
@@ -158,34 +170,44 @@ function render() {
   `).join("");
 }
 
-form.addEventListener("submit", (event) => {
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!sharedStore) {
+    alert("La bitácora central todavía no está disponible. No se ha creado ningún registro.");
+    return;
+  }
   const data = Object.fromEntries(new FormData(form).entries());
+  let built;
   try {
-    const built = buildUtm(data);
-    const item = {
-      id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-      createdAt: new Date().toISOString(),
-      label: data.label.trim(),
-      source: built.params.utm_source,
-      medium: built.params.utm_medium,
-      campaign: built.params.utm_campaign,
-      term: built.params.utm_term,
-      content: built.params.utm_content,
-      destinationUrl: data.url.trim(),
-      generatedUrl: built.url,
-      shortUrl: ""
-    };
-    const items = getItems();
-    items.unshift(item);
-    saveItems(items);
+    built = buildUtm(data);
+    if (!/^https?:$/.test(new URL(built.url).protocol)) throw new Error("Protocolo inválido");
+  } catch {
+    alert("Revisa la URL de destino. Debe comenzar por http:// o https://");
+    return;
+  }
+  const item = {
+    id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+    createdAt: new Date().toISOString(),
+    label: data.label.trim(),
+    source: built.params.utm_source, medium: built.params.utm_medium,
+    campaign: built.params.utm_campaign, term: built.params.utm_term,
+    content: built.params.utm_content, destinationUrl: data.url.trim(),
+    generatedUrl: built.url, shortUrl: ""
+  };
+  const submitButton = form.querySelector('button[type="submit"]');
+  submitButton.disabled = true;
+  try {
+    await sharedStore.add(item); // ID global otorgado por PostgreSQL.
+    await refreshSharedHistory();
     $("generatedUrl").value = built.url;
     $("resultBox").dataset.itemId = item.id;
     $("resultBox").classList.remove("hidden");
-    render();
     addShortUrl(item.id);
-  } catch {
-    alert("Revisa la URL de destino. Debe comenzar por http:// o https://");
+  } catch (error) {
+    console.error(error);
+    alert("No se pudo guardar la UTM en la base de datos central. No se ha registrado como creada.");
+  } finally {
+    submitButton.disabled = false;
   }
 });
 
@@ -215,10 +237,17 @@ $("resetForm").addEventListener("click", () => {
   $("resultBox").classList.add("hidden");
 });
 
-$("clearHistory").addEventListener("click", () => {
-  if (!confirm("¿Quieres borrar todo el historial local de UTMs?")) return;
-  localStorage.removeItem(STORAGE_KEY);
-  render();
+$("clearHistory").addEventListener("click", async () => {
+  if (!sharedStore) { alert("Conexión compartida no disponible."); return; }
+  if (!confirm("Esto eliminará el historial PARA TODOS LOS USUARIOS. Solo un administrador puede hacerlo. ¿Continuar?")) return;
+  if (!confirm("Confirma por segunda vez que deseas borrar el inventario compartido completo.")) return;
+  try {
+    await sharedStore.clearAll();
+    await refreshSharedHistory();
+  } catch (error) {
+    console.error(error);
+    alert("No se eliminó el inventario. Es posible que tu usuario no tenga permisos de administrador.");
+  }
 });
 
 historyBody.addEventListener("click", async (event) => {
@@ -241,8 +270,14 @@ historyBody.addEventListener("click", async (event) => {
   }
 
   if (button.classList.contains("delete-row")) {
-    saveItems(items.filter(x => x.id !== item.id));
-    render();
+    if (!confirm("Este registro desaparecerá para TODOS los usuarios. ¿Eliminar?")) return;
+    try {
+      await sharedStore.remove(item.id);
+      await refreshSharedHistory();
+    } catch (error) {
+      console.error(error);
+      alert("No se eliminó. Solo los administradores pueden borrar UTMs del inventario central.");
+    }
   }
 });
 
@@ -250,7 +285,7 @@ function exportRows() {
   const items = getItems();
   const headers = ["consecutivo","fecha","nombre_interno","utm_source","utm_medium","utm_campaign","utm_term","utm_content","url_destino","url_larga","url_corta"];
   const rows = items.map((x, index) => [
-    items.length - index, x.createdAt, x.label || "", x.source, x.medium, x.campaign,
+    x.consecutive, x.createdAt, x.label || "", x.source, x.medium, x.campaign,
     x.term || "", x.content || "", x.destinationUrl, x.generatedUrl, x.shortUrl || ""
   ]);
   return { items, headers, rows };
@@ -293,4 +328,22 @@ $("exportTxt").addEventListener("click", () => {
   downloadText("bitacora_utms_banfondesa_" + new Date().toISOString().slice(0,10) + ".txt", lines.join("\r\n"), "text/plain;charset=utf-8");
 });
 
-render();
+async function initializeSharedHistory() {
+  try {
+    const { openSharedStore } = await import("./shared-store.js");
+    const candidate = await openSharedStore();
+    const authorized = await candidate.requireAccess();
+    if (!authorized) return;
+    // Al iniciar desde cada dispositivo se incorporan sus registros anteriores.
+    // Las importaciones son idempotentes por el ID único antiguo.
+    await candidate.migrateLegacy(readLegacyHistory());
+    sharedStore = candidate;
+    await refreshSharedHistory();
+    sharedStore.watch(refreshSharedHistory);
+  } catch (error) {
+    console.error("No se pudo iniciar el inventario compartido", error);
+    alert("No se pudo conectar a la bitácora compartida: " + error.message);
+  }
+}
+
+initializeSharedHistory();
