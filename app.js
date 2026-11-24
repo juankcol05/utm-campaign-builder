@@ -321,12 +321,37 @@ $("exportTxt").addEventListener("click", () => {
   downloadText("bitacora_utms_banfondesa_" + new Date().toISOString().slice(0,10) + ".txt", lines.join("\r\n"), "text/plain;charset=utf-8");
 });
 
-async function startSharedStore() {
+function showLoginNotice(message) {
+  let notice = $("utmLoginNotice");
+  if (!notice) {
+    notice = document.createElement("div");
+    notice.id = "utmLoginNotice";
+    notice.setAttribute("role", "status");
+    notice.style.cssText = "max-width:1180px;margin:0 auto 16px;padding:14px 18px;background:#fff;border:1px solid #dfe4ec;border-radius:12px;color:#172033;font:14px system-ui;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap";
+    const info = document.createElement("span");
+    info.id = "utmLoginMessage";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.id = "utmLoginButton";
+    button.textContent = "Ingresar con mi correo";
+    button.className = "button secondary";
+    button.addEventListener("click", () => { void startSharedStore(true); });
+    notice.append(info, button);
+    document.querySelector("main").before(notice);
+  }
+  $("utmLoginMessage").textContent = message;
+}
+
+async function startSharedStore(requestEmail = false) {
   try {
     const { openSharedStore } = await import("./shared-store.js");
     sharedStore = await openSharedStore();
-    const allowed = await sharedStore.requireAccess();
-    if (!allowed) return; // Login por correo pendiente.
+    const allowed = await sharedStore.requireAccess(requestEmail);
+    if (!allowed) {
+      showLoginNotice("Para activar el historial centralizado debes ingresar con tu correo autorizado. No se enviarán correos al actualizar la página.");
+      return;
+    }
+    $("utmLoginNotice")?.remove();
     let previousItems = [];
     try {
       previousItems = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
@@ -348,7 +373,7 @@ async function startSharedStore() {
     });
   } catch (error) {
     console.error("No se pudo iniciar la base central", error);
-    alert("No está disponible el historial centralizado. No se guardarán registros hasta solucionar el acceso: " + error.message);
+    showLoginNotice("Acceso pendiente: " + error.message);
   }
 }
 void startSharedStore();
