@@ -1,5 +1,5 @@
 import { SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY } from "./shared-config.js";
-import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
+import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/+esm";
 
 function mapRecord(row) {
   return {
@@ -48,16 +48,22 @@ export async function openSharedStore() {
   async function getAll() {
     const all = [];
     const pageSize = 500;
-    for (let start = 0; ; start += pageSize) {
-      const { data, error } = await supabase.from("utm_links")
-        .select("*").order("id", { ascending: false })
-        .range(start, start + pageSize - 1);
+    let beforeId = null;
+    // Cursor de ID: evita registros omitidos o repetidos ante inserciones concurrentes.
+    for (;;) {
+      let query = supabase.from("utm_links")
+        .select("*").order("id", { ascending: false }).limit(pageSize);
+      if (beforeId !== null) query = query.lt("id", beforeId);
+      const { data, error } = await query;
       if (error) throw error;
-      all.push(...(data || []));
-      if (!data || data.length < pageSize) break;
+      if (!data || data.length === 0) break;
+      all.push(...data);
+      beforeId = data[data.length - 1].id;
+      if (data.length < pageSize) break;
     }
     return all.map(mapRecord);
   }
+
   async function add(item) {
     const { data, error } = await supabase.from("utm_links")
       .insert(toRecord(item)).select("*").single();
