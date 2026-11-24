@@ -44,7 +44,7 @@ export async function openSharedStore() {
       const email = window.prompt("Correo autorizado para acceder al historial compartido:");
       if (!email) return false;
       const trimmed = email.trim();
-      if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(trimmed)) {
+      if (!/^[^ @]+@[^ @]+[.][^ @]+$/.test(trimmed)) {
         throw new Error("Escribe una dirección de correo válida.");
       }
       const { error: otpError } = await supabase.auth.signInWithOtp({
