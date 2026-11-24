@@ -1,4 +1,3 @@
-import { openSharedStore } from './shared-store.js';
 const STORAGE_KEY = "utm_campaign_builder_v1";
 
 const $ = (id) => document.getElementById(id);
@@ -27,6 +26,7 @@ function normalize(value) {
 
 function buildUtm(data) {
   const url = new URL(data.url);
+  if (!["http:", "https:"].includes(url.protocol)) throw new Error("Protocolo inválido");
   const params = {
     utm_source: normalize(data.source),
     utm_medium: normalize(data.medium),
@@ -322,6 +322,7 @@ $("exportTxt").addEventListener("click", () => {
 
 async function startSharedStore() {
   try {
+    const { openSharedStore } = await import("./shared-store.js");
     sharedStore = await openSharedStore();
     const allowed = await sharedStore.requireAccess();
     if (!allowed) return; // Login por correo pendiente.
