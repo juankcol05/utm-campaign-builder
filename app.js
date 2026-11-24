@@ -161,7 +161,7 @@ function render() {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!storeReady) {
-    alert("No hay conexión autenticada con la base compartida. No se guardó la UTM.");
+    alert("Primero inicia sesión con tu correo autorizado para guardar en el historial compartido. No se registró esta UTM.");
     return;
   }
   const data = Object.fromEntries(new FormData(form).entries());
@@ -198,7 +198,7 @@ form.addEventListener("submit", async (event) => {
     void addShortUrl(saved.id);
   } catch (error) {
     console.error(error);
-    alert("No se pudo guardar la UTM en la base central. No se asignó consecutivo.");
+    alert("No se pudo guardar la UTM en la base central. No se asignó consecutivo. Detalle: " + (error?.message || "conexión o autorización no disponible"));
   } finally {
     submitButton.disabled = false;
   }
