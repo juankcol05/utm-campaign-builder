@@ -26,39 +26,37 @@ export async function openSharedStore() {
   const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
   });
-  async function requireAccess() {
+  async function requireAccess(requestEmail = false) {
     const { data: { session }, error } = await supabase.auth.getSession();
     if (error) throw error;
     if (!session) {
-      // Evitar reenvíos automáticos cuando el enlace de acceso anterior ha caducado.
-      const fragment = new URLSearchParams(window.location.hash.slice(1));
-      if (fragment.get("error") || fragment.get("error_code")) {
-        const code = fragment.get("error_code") || "login_failed";
-        window.history.replaceState(null, "", window.location.pathname + window.location.search);
-        throw new Error("El enlace de acceso no se pudo validar (" + code + "). Revisa la URL de retorno en Supabase y utiliza un correo nuevo.");
-      }
-      const lastAttempt = Number(localStorage.getItem("utm_last_magic_link_attempt") || "0");
-      if (Date.now() - lastAttempt < 120000) {
-        throw new Error("Ya solicitaste un enlace recientemente. Consulta el correo anterior: Supabase limita los envíos y los enlaces son de un solo uso.");
-      }
-      const email = window.prompt("Correo autorizado para acceder al historial compartido:");
+      if (!requestEmail) return false;
+      const email = window.prompt("Ingresa el correo de la única cuenta autorizada:");
       if (!email) return false;
       const trimmed = email.trim();
       if (!/^[^ @]+@[^ @]+[.][^ @]+$/.test(trimmed)) {
-        throw new Error("Escribe una dirección de correo válida.");
+        throw new Error("El formato del correo no es válido.");
       }
+      const lastRequest = Number(localStorage.getItem("utm_last_magic_link_attempt") || "0");
+      if (Date.now() - lastRequest < 60 * 60 * 1000) {
+        throw new Error("Ya solicitaste acceso durante la última hora. Revisa el último correo recibido y evita solicitar nuevos enlaces. Supabase tiene un límite de 2 correos por hora.");
+      }
+      // Registrar el intento ANTES de contactar el proveedor: también evita repetir 429.
+      localStorage.setItem("utm_last_magic_link_attempt", String(Date.now()));
       const { error: otpError } = await supabase.auth.signInWithOtp({
         email: trimmed,
-        options: { emailRedirectTo: "https://juankcol05.github.io/utm-campaign-builder/" }
+        options: {
+          emailRedirectTo: "https://juankcol05.github.io/utm-campaign-builder/",
+          shouldCreateUser: false
+        }
       });
       if (otpError) {
-        if (otpError.status === 429 || /rate limit|rate_limit/i.test(otpError.message || "")) {
-          throw new Error("Se alcanzó el límite de correos de Supabase (2 por hora en el servicio integrado). No solicites otro enlace hasta que se restablezca el cupo.");
+        if (otpError.status === 429 || /rate.limit|over_email_send_rate_limit/i.test(otpError.message || "")) {
+          throw new Error("Supabase rechazó el envío por límite de correos (429). Debes dejar de solicitar enlaces hasta que se libere el cupo.");
         }
         throw otpError;
       }
-      localStorage.setItem("utm_last_magic_link_attempt", String(Date.now()));
-      window.alert("Revisa tu correo. Abre una sola vez el enlace más reciente. Si te envía a localhost:3000, configura Site URL y Redirect URLs en Supabase.");
+      window.alert("Enlace solicitado. Revisa tu correo y abre UNA sola vez el enlace nuevo. Si te envía a localhost:3000, debes corregir Site URL y Redirect URLs en Supabase.");
       return false;
     }
     const { data, error: membershipError } = await supabase.rpc("utm_membership");
