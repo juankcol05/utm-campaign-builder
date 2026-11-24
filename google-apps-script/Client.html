@@ -106,7 +106,6 @@ function render() {
         <div class="row-actions">
           <button class="button secondary mini copy-row" data-id="${escapeHtml(item.id)}" type="button">Copiar larga</button>
           <button class="button secondary mini copy-short-row" data-id="${escapeHtml(item.id)}" type="button" ${item.shortUrl ? "" : "disabled"}>Copiar corta</button>
-          <button class="button secondary mini delete-row" data-id="${escapeHtml(item.id)}" type="button">Eliminar</button>
         </div>
       </td>
     </tr>
@@ -140,9 +139,6 @@ historyBody.addEventListener("click",async event=>{
  const item=items.find(x=>x.id===button.dataset.id);if(!item)return;
  if(button.classList.contains("copy-row"))return copyText(item.generatedUrl,button,"Copiar larga");
  if(button.classList.contains("copy-short-row"))return copyText(item.shortUrl,button,"Copiar corta");
- if(button.classList.contains("delete-row")){
-  alert("El historial compartido solo puede borrarlo el propietario desde Google Sheets.");
- }
 });
 function exportRows() {
   const items = getItems();
