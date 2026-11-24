@@ -48,7 +48,7 @@ as $$
 $$;
 create or replace function public.utm_membership()
 returns boolean language sql stable security invoker set search_path = ''
-as $ select private.is_utm_member(); $;
+as $$ select private.is_utm_member(); $$;
 revoke all on public.utm_links from anon, authenticated;
 revoke all on public.utm_team_members from anon, authenticated;
 revoke all on function public.utm_membership() from public, anon;
@@ -59,6 +59,7 @@ grant execute on function private.is_utm_member() to authenticated;
 grant execute on function private.is_utm_admin() to authenticated;
 grant execute on function public.utm_membership() to authenticated;
 grant select, insert, delete on public.utm_links to authenticated;
+grant usage on sequence public.utm_links_id_seq to authenticated;
 grant update (short_url) on public.utm_links to authenticated;
 drop policy if exists "utm_read_team" on public.utm_links;
 create policy "utm_read_team" on public.utm_links for select to authenticated using (private.is_utm_member());
@@ -70,7 +71,7 @@ using (private.is_utm_member()) with check (private.is_utm_member());
 drop policy if exists "utm_delete_admin" on public.utm_links;
 create policy "utm_delete_admin" on public.utm_links for delete to authenticated using (private.is_utm_admin());
 -- Ejecutar una sola vez; si la tabla ya participa en Realtime, no repetir.
-do $
+do $$
 begin
   if not exists (
     select 1 from pg_publication_tables
@@ -80,7 +81,7 @@ begin
   ) then
     alter publication supabase_realtime add table public.utm_links;
   end if;
-end $;
+end $$;
 -- Primer administrador, ejemplo. Reemplazar con correo real autorizado:
 -- insert into public.utm_team_members (email, is_admin)
 -- values ('responsable@empresa.com', true)
