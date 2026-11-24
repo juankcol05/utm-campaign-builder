@@ -135,19 +135,13 @@ $("copyUrl").addEventListener("click",()=>copyText($("generatedUrl").value,$("co
 $("copyShortUrl").addEventListener("click",()=>copyText($("shortUrl").value,$("copyShortUrl"),"Copiar corta"));
 $("retryShortUrl").addEventListener("click",()=>{if(lastItemId)void addShortUrl(lastItemId);});
 $("resetForm").addEventListener("click",()=>{form.reset();$("resultBox").classList.add("hidden");});
-$("clearHistory").addEventListener("click",async()=>{
- if(!confirm("¿Borrar todo el historial central de Google Sheets?"))return;
- if(!confirm("Confirma que deseas eliminar definitivamente todas las UTMs. El consecutivo no se reiniciará."))return;
- try{await call("clearAllUtms");await refreshShared();}catch(e){alert(e.message||e);}
-});
 historyBody.addEventListener("click",async event=>{
  const button=event.target.closest("button");if(!button)return;
  const item=items.find(x=>x.id===button.dataset.id);if(!item)return;
  if(button.classList.contains("copy-row"))return copyText(item.generatedUrl,button,"Copiar larga");
  if(button.classList.contains("copy-short-row"))return copyText(item.shortUrl,button,"Copiar corta");
  if(button.classList.contains("delete-row")){
-  if(!confirm("¿Eliminar esta UTM de Google Sheets?"))return;
-  try{await call("deleteUtm",item.id);await refreshShared();}catch(e){alert(e.message||e);}
+  alert("El historial compartido solo puede borrarlo el propietario desde Google Sheets.");
  }
 });
 function exportRows() {
