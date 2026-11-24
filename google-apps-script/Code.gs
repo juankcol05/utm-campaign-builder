@@ -1,16 +1,14 @@
 /**
  * UTM Campaign Builder Banfondesa · Mercadeo
- * Backend de Google Sheets, acceso restringido por usuario de Google.
- * Implementar como Web App de Apps Script, nunca como API publica sin autenticacion.
+ * Backend abierto por URL para consultar y crear UTMs; solo hojas de Google controlan acceso al archivo.
+ * IMPORTANTE: los datos del historial pasan a ser publicos para cualquier visitante de la URL.
  */
 const SHEET_ID = '13GH9JD9HgHQOXwFvoKFk9hUvIEbCYLHtRRL3fTxt7eQ';
 const SHEET_TAB = 'Bitácora UTMs';
-const OWNER_EMAIL = 'juanklopez05@gmail.com';
 const HEADER_COUNT = 12;
 
 function doGet() {
   // HTMLService ejecuta la aplicacion en Google, sin solicitudes cross-origin desde GitHub.
-  requireUser_();
   const page = HtmlService.createTemplateFromFile('Index');
   page.sheetUrl = 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/edit';
   return page.evaluate().setTitle('UTM Campaign Builder Banfondesa · Mercadeo');
@@ -18,15 +16,6 @@ function doGet() {
 
 function include(file) {
   return HtmlService.createHtmlOutputFromFile(file).getContent();
-}
-
-function requireUser_() {
-  const email = (Session.getActiveUser().getEmail() || '').toLowerCase().trim();
-  // Nunca usar getEffectiveUser: en "ejecutar como yo" seria siempre el propietario.
-  if (email !== OWNER_EMAIL) {
-    throw new Error('Acceso no autorizado. Entra con la cuenta de Google autorizada.');
-  }
-  return email;
 }
 
 function sheet_() {
@@ -62,7 +51,6 @@ function allRows_() {
 }
 
 function listUtms() {
-  requireUser_();
   return { items: allRows_(), sheetUrl: 'https://docs.google.com/spreadsheets/d/' + SHEET_ID + '/edit' };
 }
 
@@ -85,7 +73,6 @@ function cleanUrl_(value) {
 }
 
 function createUtm(payload) {
-  requireUser_();
   if (!payload || typeof payload !== 'object') throw new Error('Datos incompletos.');
   const source = normalize_(payload.source);
   const medium = normalize_(payload.medium);
@@ -105,6 +92,11 @@ function createUtm(payload) {
       if (existing >= 0) return toItem_(sh.getRange(existing + 2, 1, 1, HEADER_COUNT).getDisplayValues()[0]);
     }
     const properties = PropertiesService.getScriptProperties();
+    // Cuota compartida para limitar uso abusivo accidental. No es defensa frente a bots.
+    const hour = Utilities.formatDate(new Date(), 'Etc/UTC', 'yyyyMMddHH');
+    const key = 'CREATE_COUNT_' + hour;
+    const n = Number(properties.getProperty(key) || '0');
+    if (n >= 100) throw new Error('Límite temporal de 100 UTMs/hora para proteger la hoja.');
     const lastSerial = Number(properties.getProperty('LAST_CONSECUTIVO') || '0');
     const lastColumnValue = last > 1 ? Number(sh.getRange(last, 1).getDisplayValue()) || 0 : 0;
     const next = Math.max(lastSerial, lastColumnValue) + 1;
@@ -118,6 +110,7 @@ function createUtm(payload) {
     sh.appendRow(row);
     SpreadsheetApp.flush();
     properties.setProperty('LAST_CONSECUTIVO', String(next));
+    properties.setProperty(key, String(n + 1));
     return toItem_(row);
   } finally {
     lock.releaseLock();
@@ -125,7 +118,6 @@ function createUtm(payload) {
 }
 
 function shortenUtm(id) {
-  requireUser_();
   const key = String(id || '');
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
@@ -152,33 +144,9 @@ function shortenUtm(id) {
 }
 
 function deleteUtm(id) {
-  requireUser_();
-  const key = String(id || '');
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    const sh = sheet_(), last = sh.getLastRow();
-    if (last < 2) return false;
-    const ids = sh.getRange(2, 12, last - 1, 1).getDisplayValues();
-    const offset = ids.findIndex(row => row[0] === key);
-    if (offset < 0) return false;
-    sh.deleteRow(offset + 2);
-    return true;
-  } finally {
-    lock.releaseLock();
-  }
+  throw new Error('No se permite borrar UTMs desde el acceso público. El propietario puede administrarlas directamente en Google Sheets.');
 }
 
 function clearAllUtms() {
-  requireUser_();
-  const lock = LockService.getScriptLock();
-  lock.waitLock(30000);
-  try {
-    const sh = sheet_(), last = sh.getLastRow();
-    if (last >= 2) sh.deleteRows(2, last - 1);
-    // No reiniciamos LAST_CONSECUTIVO para evitar reutilizar numeros antiguos.
-    return true;
-  } finally {
-    lock.releaseLock();
-  }
+  throw new Error('La eliminación masiva está deshabilitada en la aplicación pública.');
 }
